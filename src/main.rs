@@ -34,18 +34,24 @@ pub enum Type {
     Func(Box<Type>, Box<Type>)
 }
 
-pub enum Term {
+pub enum Atom {
     Int(i64),
     Func1(Box<Fn(i64)->i64>),
     Func2(Box<Fn(i64)->Box<Fn(i64)->i64>>)
 }
 
-impl Debug for Term {
+#[derive(Debug)]
+pub enum Term {
+    Atom(Atom),
+    App(Box<Term>, Box<Term>)
+}
+
+impl Debug for Atom {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
-            Term::Int(i)   => write!(f, "{}", i),
-            Term::Func1(_) => write!(f, "{}", "<function> : Int -> Int"),
-            Term::Func2(_) => write!(f, "{}", "<function> : Int -> Int -> Int"),
+            Atom::Int(i)   => write!(f, "{}", i),
+            Atom::Func1(_) => write!(f, "{}", "<function> : Int -> Int"),
+            Atom::Func2(_) => write!(f, "{}", "<function> : Int -> Int -> Int"),
         }
     }
 }
@@ -64,7 +70,7 @@ fn get_command(input: &str) -> Option<Command> {
 
 fn evaluate(expr: &str) -> Result<Term, String> {
     let mut tokens = build_lexer(expr.trim());
-    parse(&mut tokens).and_then(execute)
+    parse(&mut tokens).and_then(reduce)
 }
 
 fn token_from_char(&c: &char) -> Option<Token> {
@@ -81,14 +87,14 @@ fn token_from_char(&c: &char) -> Option<Token> {
     }
 }
 
-fn func2_from_string(s: &str) -> Result<Term, String> {
+fn func2_from_string(s: &str) -> Result<Atom, String> {
     match s {
-        "+"  => Ok(Term::Func2( Box::new( move |x| { Box::new( move |y| {x + y})}))),
-        "-"  => Ok(Term::Func2( Box::new( move |x| { Box::new( move |y| {x - y})}))),
-        "*"  => Ok(Term::Func2( Box::new( move |x| { Box::new( move |y| {x * y})}))),
-        "//" => Ok(Term::Func2( Box::new( move |x| { Box::new( move |y| {x / y})}))),
-        "%"  => Ok(Term::Func2( Box::new( move |x| { Box::new( move |y| {x % y})}))),
-        "^"  => Ok(Term::Func2( Box::new( move |x| { Box::new( move |y| {x.pow(y.abs() as u32)})}))),
+        "+"  => Ok(Atom::Func2( Box::new( move |x| { Box::new( move |y| {x + y})}))),
+        "-"  => Ok(Atom::Func2( Box::new( move |x| { Box::new( move |y| {x - y})}))),
+        "*"  => Ok(Atom::Func2( Box::new( move |x| { Box::new( move |y| {x * y})}))),
+        "//" => Ok(Atom::Func2( Box::new( move |x| { Box::new( move |y| {x / y})}))),
+        "%"  => Ok(Atom::Func2( Box::new( move |x| { Box::new( move |y| {x % y})}))),
+        "^"  => Ok(Atom::Func2( Box::new( move |x| { Box::new( move |y| {x.pow(y.abs() as u32)})}))),
         _    => Err(format!("Unknown operator {}", s))
     }
 }
@@ -151,82 +157,80 @@ impl<'a> Iterator for Lexer<'a> {
     }
 }
 
-pub enum Tree<T> {
-    Leaf(T),
-    Branch(Vec<Tree<T>>)
-}
+fn parse(mut tokens: &mut Lexer) -> Result<Term, String> {
 
-fn parse(mut tokens: &mut Lexer) -> Result<Tree<Term>, String> {
+    fn parse_helper(tokens: &mut Lexer, is_subexpr: bool) -> Result<Term, String> {
+        let close_msg = "Unexpected CLOSE delimiter";
+        let mut term = None;
+        let mut error = None;
+        loop {
+            let next_term = match tokens.next() {
+                Some(Token::Open) => parse_helper(tokens, true),
+                Some(Token::Int(s)) => {
+                    s.parse::<i64>()
+                        .map_err(|_| {String::from("Not a valid integer")})
+                        .map(Atom::Int)
+                        .map(Term::Atom)
+                },
+                Some(Token::Op(s)) => {
+                    func2_from_string(&s).map(Term::Atom)
+                },
+                Some(Token::Close) => {
+                    if !is_subexpr { error = Some(Err(String::from(close_msg))); }
+                    break;
+                },
+                None => {
+                    if is_subexpr { error = Some(Err(String::from("Unexpected end of input"))); }
+                    break;
+                },
+            };
 
-    fn parse_helper(tokens: &mut Lexer) -> Result<Tree<Term>, String> {
-        let close_msg = String::from("Unexpected CLOSE delimiter");
-        match tokens.next() {
-            Some(Token::Open)   => {
-                let mut subtrees : Vec<Tree<Term>> = vec![];
-                loop {
-                    let subtree = parse_helper(tokens);
-                    match subtree {
-                        // I don't like this way of doing it
-                        Err(msg) => {
-                            if msg == close_msg {
-                                break;
-                            } else {
-                                return Err(msg);
-                            }
+            match next_term {
+                Ok(nt) => {
+                    match term {
+                        None => { term = Some(nt); },
+                        Some(t) => { term = Some(Term::App(Box::new(t), Box::new(nt)));
                         },
-                        Ok(st) => {
-                            subtrees.push(st);
-                        }
                     }
+                },
+                Err(msg) => {
+                    error = Some(Err(msg));
                 }
-                Ok(Tree::Branch(subtrees))
-            },
-            Some(Token::Int(s)) => {
-                s.parse::<i64>()
-                    .map_err(|_| {String::from("Not a valid integer")})
-                    .map(Term::Int)
-                    .map(Tree::Leaf)
-            },
-            Some(Token::Op(s))  => {
-                func2_from_string(&s).map(Tree::Leaf)
-            },
-            Some(Token::Close)  => Err(close_msg),
-            None                => Err(String::from("Unexpected end of input. Unclosed delimiter?"))
+            }
+        }
+
+        match error {
+            None => {
+                match term {
+                    Some(t) => Ok(t),
+                    None => Err(String::from("Empty expression"))
+                }
+            }
+            Some(err) => err
         }
     }
 
-    let ast = parse_helper(&mut tokens);
-    match tokens.next() {
-        None => ast,
-        _    => Err(String::from("Characters left over"))
-    }
+    parse_helper(&mut tokens, false)
 }
 
 fn apply(func: Result<Term, String>, arg: Result<Term, String>) -> Result<Term, String> {
     let i = match arg {
-        Ok(Term::Int(j)) => Ok(j),
+        Ok(Term::Atom(Atom::Int(j))) => Ok(j),
         _ => Err(format!("Type error: expected Int, got {:?} ", arg))
     };
     match (func, i) {
-        (Ok(_),              Err(msg)) => Err(msg),
-        (Ok(Term::Func1(f)), Ok(n))    => Ok(Term::Int((*f)(n))),
-        (Ok(Term::Func2(f)), Ok(n))    => Ok(Term::Func1((*f)(n))),
-        (Ok(f), _)    => Err(format!("Type error: {:?} is not a function", f)),
-        (Err(msg), _) => Err(msg)
+        (Ok(Term::Atom(Atom::Func1(f))), Ok(n)) => Ok(Term::Atom(Atom::Int((*f)(n)))),
+        (Ok(Term::Atom(Atom::Func2(f))), Ok(n)) => Ok(Term::Atom(Atom::Func1((*f)(n)))),
+        (Ok(f), Ok(_)) => Err(format!("Type error: {:?} is not a function", f)),
+        (Ok(_), Err(msg)) | (Err(msg), _) => Err(msg)
     }
 }
 
-fn execute(ast: Tree<Term>) -> Result<Term, String> {
+fn reduce(ast: Term) -> Result<Term, String> {
     match ast {
-        Tree::Leaf(term) => Ok(term),
-        Tree::Branch(ts) => {
-            let subtrees = ts.into_iter();
-            let mut terms = subtrees.map(execute);
-            let init = match terms.next() {
-                Some(term) => term,
-                None       => Err(String::from("Empty expression"))
-            };
-            terms.fold(init, apply)
+        Term::Atom(_) => Ok(ast),
+        Term::App(func, arg) => {
+            apply(reduce(*func), reduce(*arg))
         }
     }
 }
@@ -260,6 +264,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    use super::Atom;
     use super::Term;
     use super::Token;
     use super::build_lexer;
@@ -275,9 +280,26 @@ mod tests {
     }
 
     fn assert_evaluation_err(expr: &str, msg: &str) {
-        match evaluate(expr) {
+        let result = evaluate(expr);
+        match result {
             Err(m) => { assert_eq!(m, msg) },
-            _        => panic!()
+            _ => {
+                println!("Expected Err({}). Instead got {:?}", msg, result);
+                panic!()
+            }
+        }
+    }
+
+    fn assert_evaluates_to_lit(expr: &str, expected: Atom) {
+        let result = evaluate(expr).unwrap();
+        match (result, expected) {
+            (Term::Atom(Atom::Int(i)),   Atom::Int(j))     => assert_eq!(i, j),
+            (Term::Atom(Atom::Func1(_)), Atom::Func1(_))   => (),
+            (Term::Atom(Atom::Func2(_)), Atom::Func2(_))   => (),
+            (r, e) => {
+                println!("Expected {:?}. Instead got {:?}", r, e);
+                panic!()
+            }
         }
     }
 
@@ -285,18 +307,19 @@ mod tests {
 
     #[test]
     fn test_empty_input() {
-        assert_evaluation_err("", "Unexpected end of input. Unclosed delimiter?");
+        assert_evaluation_err("", "Empty expression");
         assert_evaluation_err("()", "Empty expression");
     }
 
     #[test]
-    fn test_extra_close_delimiter() {
-        assert_evaluation_err("(+ 5 8))", "Characters left over");
+    fn test_unbalanced_delimiters() {
+        assert_evaluation_err("(+ 5 8))", "Unexpected CLOSE delimiter");
+        assert_evaluation_err("(+ 5 (8)", "Unexpected end of input");
     }
 
     #[test]
     fn test_missing_outer_parens() {
-        assert_evaluation_err("+ 10 10", "Characters left over");
+        assert_evaluates_to_lit("+ 10 10", Atom::Int(20));
     }
 
     /* Evaluating valid input */
@@ -305,8 +328,8 @@ mod tests {
     fn test_evaluate_int() {
         let result = evaluate("42");
         match result {
-            Ok(Term::Int(i)) => assert_eq!(i, 42),
-            _                => panic!()
+            Ok(Term::Atom(Atom::Int(i))) => assert_eq!(i, 42),
+            _ => panic!()
         }
     }
 
@@ -315,26 +338,22 @@ mod tests {
         let add = evaluate("+");
         let div = evaluate("//");
         match (add, div) {
-            (Ok(Term::Func2(_)), Ok(Term::Func2(_))) => {},
-            _                                        => panic!()
+            (Ok(Term::Atom(Atom::Func2(_))), Ok(Term::Atom(Atom::Func2(_)))) => {},
+            _ => panic!()
         }
     }
 
     #[test]
     fn test_partially_apply_op() {
-        let result = evaluate("(+ 10)");
-        match result {
-            Ok(Term::Func1(_)) => {},
-            _                  => panic!()
-        }
+        assert_evaluates_to_lit("(+ 10)", Atom::Func1(Box::new(|y| {y + 10})));
     }
 
     #[test]
     fn test_fully_apply_op() {
         let result = evaluate("(// 12 3)");
         match result {
-            Ok(Term::Int(i)) => assert_eq!(i, 4),
-            _                => panic!()
+            Ok(Term::Atom(Atom::Int(i))) => assert_eq!(i, 4),
+            _ => panic!()
         }
     }
 
@@ -342,6 +361,6 @@ mod tests {
 
     #[test]
     fn test_too_many_arguments() {
-        assert_evaluation_err("(* 1 2 3)", "Type error: 2 is not a function");
+        assert_evaluation_err("(* 1 2 3)", "Type error: Atom(2) is not a function");
     }
 }
