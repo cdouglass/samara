@@ -5,6 +5,7 @@ use std::io;
 use std::io::Write;
 use std::iter::Iterator;
 use std::iter::Peekable;
+use std::ops::Deref;
 use std::str::Chars;
 
 
@@ -29,9 +30,11 @@ pub enum Token {
     Op(String)
 }
 
+#[derive(PartialEq)]
+#[derive(Clone)]
 pub enum Type {
     Int,
-    Func(Box<Type>, Box<Type>)
+    Arrow(Box<Type>, Box<Type>)
 }
 
 pub enum Atom {
@@ -42,8 +45,8 @@ pub enum Atom {
 
 #[derive(Debug)]
 pub enum Term {
-    Atom(Atom),
-    App(Box<Term>, Box<Term>)
+    Atom(Atom, Box<Type>),
+    App(Box<Term>, Box<Term>, Box<Type>)
 }
 
 impl Debug for Atom {
@@ -52,6 +55,15 @@ impl Debug for Atom {
             Atom::Int(i)   => write!(f, "{}", i),
             Atom::Func1(_) => write!(f, "{}", "<function> : Int -> Int"),
             Atom::Func2(_) => write!(f, "{}", "<function> : Int -> Int -> Int"),
+        }
+    }
+}
+
+impl Debug for Type {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match *self {
+            Type::Int => write!(f, "Int"),
+            Type::Arrow(ref a, ref b) => write!(f, "{:?} -> ({:?})", *a, *b)
         }
     }
 }
@@ -164,16 +176,16 @@ fn parse(mut tokens: &mut Lexer) -> Result<Term, String> {
         let mut term = None;
         let mut error = None;
         loop {
+            let mut combined_term = None;
             let next_term = match tokens.next() {
                 Some(Token::Open) => parse_helper(tokens, true),
                 Some(Token::Int(s)) => {
                     s.parse::<i64>()
                         .map_err(|_| {String::from("Not a valid integer")})
-                        .map(Atom::Int)
-                        .map(Term::Atom)
+                        .map(|i| Term::Atom(Atom::Int(i), Box::new(Type::Int)))
                 },
                 Some(Token::Op(s)) => {
-                    func2_from_string(&s).map(Term::Atom)
+                    func2_from_string(&s).map(|t| Term::Atom(t, Box::new(Type::Arrow(Box::new(Type::Int), Box::new(Type::Arrow(Box::new(Type::Int), Box::new(Type::Int)))))))
                 },
                 Some(Token::Close) => {
                     if !is_subexpr { error = Some(Err(String::from(close_msg))); }
@@ -188,14 +200,30 @@ fn parse(mut tokens: &mut Lexer) -> Result<Term, String> {
             match next_term {
                 Ok(nt) => {
                     match term {
-                        None => { term = Some(nt); },
-                        Some(t) => { term = Some(Term::App(Box::new(t), Box::new(nt)));
-                        },
+                        None => { combined_term = Some(nt); },
+                        Some(tm) => {
+                            // using clone to avoid borrowing tm
+                            let term_typ = get_type(&tm);
+                            let nt_typ = get_type(&nt);
+                            match term_typ {
+                                Type::Int => {
+                                    error = Some(Err(String::from("Type error: Int is not a function")));
+                                },
+                                Type::Arrow(arg_type, output_type) => {
+                                    if nt_typ == *arg_type {
+                                        combined_term = Some(Term::App(
+                                            Box::new(tm),
+                                            Box::new(nt),
+                                            output_type
+                                        ));
+                                    }
+                                }
+                            }
+                        }
                     }
+                    term = combined_term;
                 },
-                Err(msg) => {
-                    error = Some(Err(msg));
-                }
+                Err(msg) => { error = Some(Err(msg)); }
             }
         }
 
@@ -213,24 +241,24 @@ fn parse(mut tokens: &mut Lexer) -> Result<Term, String> {
     parse_helper(&mut tokens, false)
 }
 
-fn apply(func: Result<Term, String>, arg: Result<Term, String>) -> Result<Term, String> {
-    let i = match arg {
-        Ok(Term::Atom(Atom::Int(j))) => Ok(j),
-        _ => Err(format!("Type error: expected Int, got {:?} ", arg))
-    };
-    match (func, i) {
-        (Ok(Term::Atom(Atom::Func1(f))), Ok(n)) => Ok(Term::Atom(Atom::Int((*f)(n)))),
-        (Ok(Term::Atom(Atom::Func2(f))), Ok(n)) => Ok(Term::Atom(Atom::Func1((*f)(n)))),
-        (Ok(f), Ok(_)) => Err(format!("Type error: {:?} is not a function", f)),
-        (Ok(_), Err(msg)) | (Err(msg), _) => Err(msg)
+fn get_type(term: &Term) -> Type {
+    match *term {
+        Term::Atom(_, ref t) | Term::App(_, _, ref t) => (*t.deref()).clone()
     }
 }
 
 fn reduce(ast: Term) -> Result<Term, String> {
     match ast {
-        Term::Atom(_) => Ok(ast),
-        Term::App(func, arg) => {
-            apply(reduce(*func), reduce(*arg))
+        Term::Atom(_, _) => Ok(ast),
+        // would only have gotten here if types already validated
+        Term::App(func, arg, typ) => {
+            let f = reduce(*func);
+            let a = reduce(*arg);
+            match (f, a) {
+                (Ok(Term::Atom(Atom::Func1(f), _)), Ok(Term::Atom(Atom::Int(n), _))) => Ok(Term::Atom(Atom::Int((*f)(n)), typ)),
+                (Ok(Term::Atom(Atom::Func2(f), _)), Ok(Term::Atom(Atom::Int(n), _))) => Ok(Term::Atom(Atom::Func1((*f)(n)), typ)),
+                _ => Err(String::from("Not implemented"))
+            }
         }
     }
 }
@@ -273,29 +301,28 @@ mod tests {
     #[test]
     fn test_lex() {
         let input = "(5  5 * / // +34()";
-        println!("{}", input);
         let expected = [Token::Open, Token::Int(String::from("5")), Token::Int(String::from("5")), Token::Op(String::from("*")), Token::Op(String::from("/")), Token::Op(String::from("//")), Token::Op(String::from("+")), Token::Int(String::from("34")), Token::Open, Token::Close];
         let actual : Vec<Token>  = build_lexer(input).collect();
         assert!(actual == expected);
     }
 
     fn assert_evaluation_err(expr: &str, msg: &str) {
-        let result = evaluate(expr);
-        match result {
+        match evaluate(expr) {
             Err(m) => { assert_eq!(m, msg) },
-            _ => {
+            //Err(m) | Ok((Err(m), _)) | Ok((Err(m), _)) => { assert_eq!(m, msg) },
+            result => {
                 println!("Expected Err({}). Instead got {:?}", msg, result);
                 panic!()
             }
         }
     }
 
-    fn assert_evaluates_to_lit(expr: &str, expected: Atom) {
+    fn assert_evaluates_to_atom(expr: &str, expected: Atom) {
         let result = evaluate(expr).unwrap();
         match (result, expected) {
-            (Term::Atom(Atom::Int(i)),   Atom::Int(j))     => assert_eq!(i, j),
-            (Term::Atom(Atom::Func1(_)), Atom::Func1(_))   => (),
-            (Term::Atom(Atom::Func2(_)), Atom::Func2(_))   => (),
+            (Term::Atom(Atom::Int(i), _),   Atom::Int(j))     => assert_eq!(i, j),
+            (Term::Atom(Atom::Func1(_), _), Atom::Func1(_))   => (),
+            (Term::Atom(Atom::Func2(_), _), Atom::Func2(_))   => (),
             (r, e) => {
                 println!("Expected {:?}. Instead got {:?}", r, e);
                 panic!()
@@ -319,18 +346,14 @@ mod tests {
 
     #[test]
     fn test_missing_outer_parens() {
-        assert_evaluates_to_lit("+ 10 10", Atom::Int(20));
+        assert_evaluates_to_atom("+ 10 10", Atom::Int(20));
     }
 
     /* Evaluating valid input */
 
     #[test]
     fn test_evaluate_int() {
-        let result = evaluate("42");
-        match result {
-            Ok(Term::Atom(Atom::Int(i))) => assert_eq!(i, 42),
-            _ => panic!()
-        }
+        assert_evaluates_to_atom("42", Atom::Int(42));
     }
 
     #[test]
@@ -338,29 +361,25 @@ mod tests {
         let add = evaluate("+");
         let div = evaluate("//");
         match (add, div) {
-            (Ok(Term::Atom(Atom::Func2(_))), Ok(Term::Atom(Atom::Func2(_)))) => {},
+            (Ok(Term::Atom(Atom::Func2(_), _)), Ok(Term::Atom(Atom::Func2(_), _))) => {},
             _ => panic!()
         }
     }
 
     #[test]
     fn test_partially_apply_op() {
-        assert_evaluates_to_lit("(+ 10)", Atom::Func1(Box::new(|y| {y + 10})));
+        assert_evaluates_to_atom("(+ 10)", Atom::Func1(Box::new(|y| {y + 10})));
     }
 
     #[test]
     fn test_fully_apply_op() {
-        let result = evaluate("(// 12 3)");
-        match result {
-            Ok(Term::Atom(Atom::Int(i))) => assert_eq!(i, 4),
-            _ => panic!()
-        }
+        assert_evaluates_to_atom("(// 12 3)", Atom::Int(4));
     }
 
     /* Type errors */
 
     #[test]
     fn test_too_many_arguments() {
-        assert_evaluation_err("(* 1 2 3)", "Type error: Atom(2) is not a function");
+        assert_evaluation_err("(* 1 2 3)", "Type error: Int is not a function");
     }
 }
