@@ -1,99 +1,57 @@
 use std::iter::Iterator;
-use std::ops::Deref;
+use std::str::FromStr;
 
 use interpret::tokenize::Lexer;
 use interpret::tokenize::Token;
 
 use interpret::types::Atom;
 use interpret::types::Term;
-use interpret::types::Type;
-
-fn func2_from_string(s: &str) -> Result<Atom, String> {
-    match s {
-        "+"  => Ok(Atom::Func2( Box::new( move |x| { Box::new( move |y| {x + y})}))),
-        "-"  => Ok(Atom::Func2( Box::new( move |x| { Box::new( move |y| {x - y})}))),
-        "*"  => Ok(Atom::Func2( Box::new( move |x| { Box::new( move |y| {x * y})}))),
-        "//" => Ok(Atom::Func2( Box::new( move |x| { Box::new( move |y| {x / y})}))),
-        "%"  => Ok(Atom::Func2( Box::new( move |x| { Box::new( move |y| {x % y})}))),
-        "^"  => Ok(Atom::Func2( Box::new( move |x| { Box::new( move |y| {x.pow(y.abs() as u32)})}))),
-        _    => Err(format!("Unknown operator {}", s)) 
-    }
-}
 
 pub fn parse(mut tokens: &mut Lexer) -> Result<Term, String> {
-
-    fn parse_helper(tokens: &mut Lexer, is_subexpr: bool) -> Result<Term, String> {
-        let close_msg = "Unexpected CLOSE delimiter";
-        let mut term = None;
-        let mut error = None;
-        loop {
-            let mut combined_term = None;
-            let next_term = match tokens.next() {
-                Some(Token::Open) => parse_helper(tokens, true),
-                Some(Token::Int(s)) => {
-                    s.parse::<i64>()
-                        .map_err(|_| {String::from("Not a valid integer")})
-                        .map(|i| Term::Atom(Atom::Int(i), Box::new(Type::Int)))
-                },
-                Some(Token::Op(s)) => {
-                    func2_from_string(&s).map(|t| Term::Atom(t, Box::new(Type::Arrow(Box::new(Type::Int), Box::new(Type::Arrow(Box::new(Type::Int), Box::new(Type::Int)))))))
-                },
-                Some(Token::Close) => {
-                    if !is_subexpr { error = Some(Err(String::from(close_msg))); }
-                    break;
-                },
-                None => {
-                    if is_subexpr { error = Some(Err(String::from("Unexpected end of input"))); }
-                    break;
-                },
-            };
-
-            match next_term {
-                Ok(nt) => {
-                    match term {
-                        None => { combined_term = Some(nt); },
-                        Some(tm) => {
-                            // using clone to avoid borrowing tm
-                            let term_typ = get_type(&tm);
-                            let nt_typ = get_type(&nt);
-                            match term_typ {
-                                Type::Int => {
-                                    error = Some(Err(String::from("Type error: Int is not a function")));
-                                },
-                                Type::Arrow(arg_type, output_type) => {
-                                    if nt_typ == *arg_type {
-                                        combined_term = Some(Term::App(
-                                            Box::new(tm),
-                                            Box::new(nt),
-                                            output_type
-                                        ));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    term = combined_term;
-                },
-                Err(msg) => { error = Some(Err(msg)); }
-            }
-        }
-
-        match error {
-            None => {
-                match term {
-                    Some(t) => Ok(t),
-                    None => Err(String::from("Empty expression"))
-                }
-            }
-            Some(err) => err
-        }
-    }
-
-    parse_helper(&mut tokens, false)
+    parse_term(&mut tokens, false)
 }
 
-fn get_type(term: &Term) -> Type {
-    match *term {
-        Term::Atom(_, ref t) | Term::App(_, _, ref t) => (*t.deref()).clone()
+fn parse_term(tokens: &mut Lexer, waiting_for_close: bool) -> Result<Term, String> {
+    let close_msg = String::from("Unexpected CLOSE delimiter");
+    let end_of_input_msg = String::from("Unexpected end of input");
+    let mut term_so_far = None;
+
+    loop {
+        let next_term_result = match tokens.next() {
+            Some(Token::Close) => {
+                if waiting_for_close {
+                    return finish_term(term_so_far);
+                } else {
+                    return Err(close_msg);
+                }
+            },
+            Some(Token::Open) => parse_term(tokens, true),
+            Some(Token::Atom(s)) => {
+                Atom::from_str(&s).map(Term::Atom)
+            },
+            None => {
+                if waiting_for_close {
+                    return Err(end_of_input_msg);
+                } else {
+                    return finish_term(term_so_far);
+                }
+            },
+        };
+
+        match next_term_result {
+            Ok(nt) => match term_so_far {
+                Some(t) => { term_so_far = Some(Term::App(Box::new(t), Box::new(nt))); },
+                None => { term_so_far = Some(nt); }
+            },
+            Err(msg) => { return Err(msg); }
+        }
+    }
+}
+
+fn finish_term(term: Option<Term>) -> Result<Term, String> {
+    let empty_msg = String::from("Empty expression");
+    match term {
+        None => Err(empty_msg),
+        Some(t) => Ok(t)
     }
 }

@@ -8,19 +8,28 @@ use std::str::Chars;
 pub enum Token {
     Open,
     Close,
-    Int(String),
-    Op(String)
+    Atom(String)
 }
 
-fn token_from_char(&c: &char) -> Option<Token> {
-    let s = c.to_string();
+#[derive(PartialEq)]
+enum TokenType {
+    Int,
+    Op,
+    Var,
+    Open,
+    Close
+}
+
+fn token_type_from_char(&c: &char) -> Option<TokenType> {
     if c.is_numeric() {
-        Some(Token::Int(s))
+        Some(TokenType::Int)
+    } else if c.is_alphabetic() {
+        Some(TokenType::Var)
     } else {
         match c {
-            '('                     => Some(Token::Open),
-            ')'                     => Some(Token::Close),
-            '+'|'-'|'*'|'/'|'^'|'%' => Some(Token::Op(s)),
+            '('                     => Some(TokenType::Open),
+            ')'                     => Some(TokenType::Close),
+            '+'|'-'|'*'|'/'|'^'|'%' => Some(TokenType::Op),
             _                       => None
         }
     }
@@ -39,47 +48,40 @@ pub fn build_lexer(expr: &str) -> Lexer {
 impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Token> {
-        let mut next_tok = None;
-        let mut advance = false;
+        let mut token_type = None;
+        let mut token_so_far = None;
         loop {
-            if advance { self.it.next(); }
-            let c = self.it.peek();
-            if c == None { break; }
-            let partial_tok = c.and_then(token_from_char);
-            match (next_tok.clone(), partial_tok.clone()) {
-                (None, Some(Token::Open)) | (None, Some(Token::Close)) => {
-                    next_tok = partial_tok;
-                    advance = true;
-                    break;
+            // map to prevent borrow of self.it
+            // https://stackoverflow.com/questions/26920789/unable-to-borrow-an-iterator-as-mutable-more-than-once-at-a-time
+            let c = self.it.peek().map(|c| {*c});
+            match c {
+                Some(ref ch) => {
+                    match token_so_far {
+                        Some(Token::Open) | Some(Token::Close) => { return token_so_far; },
+                        Some(Token::Atom(s)) => {
+                            if token_type == token_type_from_char(ch) {
+                                token_so_far = Some(Token::Atom(s + &ch.to_string()));
+                                self.it.next();
+                            } else {
+                                return Some(Token::Atom(s));
+                            }
+                        },
+                        None => {
+                            self.it.next();
+                            match token_type_from_char(ch) {
+                                Some(TokenType::Open) => { token_so_far = Some(Token::Open); },
+                                Some(TokenType::Close) => { return Some(Token::Close); },
+                                Some(tt) => {
+                                    token_type = Some(tt);
+                                    token_so_far = Some(Token::Atom(ch.to_string()));
+                                },
+                                None => { }
+                            }
+                        }
+                    }
                 },
-                (None, Some(Token::Op(_))) | (None, Some(Token::Int(_))) => {
-                    next_tok = partial_tok;
-                    advance = true;
-                },
-
-                (Some(Token::Op(s)), Some(Token::Op(c))) => {
-                    advance = true;
-                    next_tok = Some(Token::Op(s + &c.to_string()));
-                },
-                (Some(Token::Int(s)), Some(Token::Int(c))) => {
-                    advance = true;
-                    next_tok = Some(Token::Int(s + &c.to_string()));
-                },
-
-                (None, None) => {
-                    advance = true;
-                },
-                (_, None) => {
-                    advance = true;
-                    break;
-                },
-                _ => {
-                    advance = false;
-                    break;
-                },
+                None => { return token_so_far; }
             }
         }
-        if advance { self.it.next(); }
-        next_tok
     }
 }
