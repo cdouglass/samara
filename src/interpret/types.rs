@@ -42,6 +42,7 @@ pub enum Term {
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub enum Type {
+    Bool,
     Int,
     Arrow(Box<Type>, Box<Type>)
 }
@@ -90,6 +91,7 @@ impl Debug for Term {
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
+            Type::Bool => write!(f, "Bool"),
             Type::Int => write!(f, "Int"),
             Type::Arrow(ref a, ref b) => write!(f, "{:?} -> {:?}", *a, *b)
         }

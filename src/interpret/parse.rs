@@ -133,7 +133,6 @@ fn parse_conditional(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, m
     }
 }
 
-
 fn parse_let(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut context: &mut Vec<String>, mut session_bindings: &mut HashMap<String, Term>) -> Result<Term, String> {
     let syntax_err = Err(String::from("Syntax error"));
 

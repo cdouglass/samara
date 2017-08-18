@@ -8,12 +8,29 @@ use self::types::Atom::*;
 use self::types::Op::*;
 use self::types::Term;
 use self::types::Term::*;
+use self::types::Type;
 
 mod parse;
 use self::parse::parse;
 
+mod infer;
+use self::infer::infer_type;
+
 #[cfg(test)]
 mod tests;
+
+pub fn type_of(expr: &str) -> (Result<Term, String>, Result<Type, String>) {
+    let mut tokens = build_lexer(expr.trim());
+    let mut session_bindings = HashMap::new();
+    let ast = parse(&mut tokens, &mut session_bindings);
+    match ast {
+        Ok(term) =>{
+            let typ = infer_type(&term);
+            (Ok(term), typ)
+        },
+        Err(msg) => (Err(msg), Err(String::from("Syntax error")))
+    }
+}
 
 pub fn evaluate(expr: &str, mut session_bindings: &mut HashMap<String, Term>) -> Result<Term, String> {
     let mut tokens = build_lexer(expr.trim());
