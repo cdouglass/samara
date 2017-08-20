@@ -55,9 +55,9 @@ fn apply(func: Term, arg: Term) -> Result<Term, String> {
                 _ => Err(type_err)
             }
         },
-        Lambda(t) => {
+        Lambda(_, _) => {
             Err(String::from("Not implemented: Lambda application"))
         }
-        Var(_) => Err(type_err)
+        Var(_, _) => Err(type_err)
     }
 }

@@ -5,14 +5,12 @@ use std::str::FromStr;
 
 use self::Op::*;
 
-#[derive(Debug)]
 #[derive(PartialEq)]
 pub enum Atom {
     BuiltIn(Op),
     Int(i64),
 }
 
-#[derive(Debug)]
 #[derive(PartialEq)]
 pub enum Op {
     Add,
@@ -23,12 +21,11 @@ pub enum Op {
     Exp
 }
 
-#[derive(Debug)]
 pub enum Term {
     Atom(Atom),
     App(Box<Term>, Box<Term>),
-    Lambda(Box<Term>), // using de Bruijn indices instead of names
-    Var(usize)
+    Lambda(Box<Term>, String), // uses de Bruijn indices internally, but keeps name for debugging
+    Var(usize, String)
 }
 
 #[derive(Clone)]
@@ -38,11 +35,45 @@ pub enum Type {
     Arrow(Box<Type>, Box<Type>)
 }
 
+impl Debug for Op {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let s = match *self {
+            Add => "+" ,
+            Sub => "-" ,
+            Mul => "*" ,
+            Div => "//",
+            Mod => "%" ,
+            Exp => "^"
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl Debug for Atom {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match *self {
+            Atom::Int(n) => write!(f, "{}", n),
+            Atom::BuiltIn(ref op) => write!(f, "{:?}", op)
+        }
+    }
+}
+
+impl Debug for Term {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match *self {
+            Term::Atom(ref a) => write!(f, "{:?}", a),
+            Term::App(ref a, ref b) => write!(f, "{:?} {:?}", a, b),
+            Term::Lambda(ref t, ref name) => write!(f, "\\{} -> ({:?})", name, t),
+            Term::Var(_, ref name) => write!(f, "{}", name)
+        }
+    }
+}
+
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
             Type::Int => write!(f, "Int"),
-            Type::Arrow(ref a, ref b) => write!(f, "{:?} -> ({:?})", *a, *b)
+            Type::Arrow(ref a, ref b) => write!(f, "{:?} -> {:?}", *a, *b)
         }
     }
 }

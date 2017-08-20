@@ -36,10 +36,10 @@ fn parse_term(tokens: &mut Lexer, mut paren_depth: &mut i64, mut context: &mut V
             Some(Token::Lambda) => {
                 match (tokens.next(), tokens.next()) {
                     (Some(Token::Identifier(s)), Some(Token::Arrow)) => {
-                        context.push(s);
+                        context.push(s.clone());
                         let body = parse_term(tokens, &mut paren_depth, &mut context);
                         context.pop();
-                        body.map(|b| Term::Lambda(Box::new(b)))
+                        body.map(|b| Term::Lambda(Box::new(b), s))
                     },
                     _ => Err(String::from("Syntax error in lambda expression"))
                 }
@@ -48,7 +48,7 @@ fn parse_term(tokens: &mut Lexer, mut paren_depth: &mut i64, mut context: &mut V
             Some(Token::Identifier(ref s)) => {
                 let mut stack = context.iter().rev();
                 match stack.position(|x| x == s) {
-                    Some(k) => Ok(Term::Var(k)),
+                    Some(k) => Ok(Term::Var(k, s.clone())),
                     None => Err(String::from(format!("Error: Undefined variable {}", s)))
                 }
             },
