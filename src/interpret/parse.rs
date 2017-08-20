@@ -5,37 +5,66 @@ use interpret::tokenize::Lexer;
 use interpret::tokenize::Token;
 
 use interpret::types::Atom;
+use interpret::types::Op;
 use interpret::types::Term;
 
 pub fn parse(mut tokens: &mut Lexer) -> Result<Term, String> {
-    parse_term(&mut tokens, false)
+    let mut paren_depth = 0;
+    let mut context = vec![];
+    parse_term(&mut tokens, &mut paren_depth, &mut context)
 }
 
-fn parse_term(tokens: &mut Lexer, waiting_for_close: bool) -> Result<Term, String> {
+fn parse_term(tokens: &mut Lexer, mut paren_depth: &mut i64, mut context: &mut Vec<String>) -> Result<Term, String> {
     let close_msg = String::from("Unexpected CLOSE delimiter");
     let end_of_input_msg = String::from("Unexpected end of input");
     let mut term_so_far = None;
 
     loop {
         let next_term_result = match tokens.next() {
+            Some(Token::Open) => {
+                *paren_depth += 1;
+                parse_term(tokens, &mut paren_depth, &mut context)
+            },
             Some(Token::Close) => {
-                if waiting_for_close {
-                    return finish_term(term_so_far);
+                if *paren_depth > 0 {
+                    *paren_depth -= 1;
+                    break;
                 } else {
                     return Err(close_msg);
                 }
             },
-            Some(Token::Open) => parse_term(tokens, true),
-            Some(Token::Atom(s)) => {
-                Atom::from_str(&s).map(Term::Atom)
-            },
-            None => {
-                if waiting_for_close {
-                    return Err(end_of_input_msg);
-                } else {
-                    return finish_term(term_so_far);
+            Some(Token::Lambda) => {
+                match (tokens.next(), tokens.next()) {
+                    (Some(Token::Identifier(s)), Some(Token::Arrow)) => {
+                        context.push(s);
+                        let body = parse_term(tokens, &mut paren_depth, &mut context);
+                        context.pop();
+                        body.map(|b| Term::Lambda(Box::new(b)))
+                    },
+                    _ => Err(String::from("Syntax error in lambda expression"))
                 }
             },
+            Some(Token::Arrow) => Err(String::from("Syntax error: -> found outside lambda expression")),
+            Some(Token::Identifier(ref s)) => {
+                let mut stack = context.iter().rev();
+                match stack.position(|x| x == s) {
+                    Some(k) => Ok(Term::Var(k)),
+                    None => Err(String::from(format!("Error: Undefined variable {}", s)))
+                }
+            },
+            Some(Token::Number(s)) => {
+                s.parse::<i64>()
+                    .map_err(|_| String::from(format!("Invalid integer: {}", s)))
+                    .map(|n| Term::Atom(Atom::Int(n)))
+            },
+            Some(Token::Operator(s)) => {
+                Op::from_str(&s).map(|op| Term::Atom(Atom::BuiltIn(op)))
+            },
+            None => {
+                if *paren_depth > 0 {
+                    return Err(end_of_input_msg);
+                } else { break; }
+            }
         };
 
         match next_term_result {
@@ -46,12 +75,9 @@ fn parse_term(tokens: &mut Lexer, waiting_for_close: bool) -> Result<Term, Strin
             Err(msg) => { return Err(msg); }
         }
     }
-}
 
-fn finish_term(term: Option<Term>) -> Result<Term, String> {
-    let empty_msg = String::from("Empty expression");
-    match term {
-        None => Err(empty_msg),
-        Some(t) => Ok(t)
+    match term_so_far {
+        Some(term) => Ok(term),
+        None => Err(end_of_input_msg)
     }
 }

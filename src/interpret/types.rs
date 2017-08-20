@@ -10,7 +10,6 @@ use self::Op::*;
 pub enum Atom {
     BuiltIn(Op),
     Int(i64),
-    Var(String)
 }
 
 #[derive(Debug)]
@@ -27,7 +26,9 @@ pub enum Op {
 #[derive(Debug)]
 pub enum Term {
     Atom(Atom),
-    App(Box<Term>, Box<Term>)
+    App(Box<Term>, Box<Term>),
+    Lambda(Box<Term>), // using de Bruijn indices instead of names
+    Var(usize)
 }
 
 #[derive(Clone)]
@@ -43,18 +44,6 @@ impl Debug for Type {
             Type::Int => write!(f, "Int"),
             Type::Arrow(ref a, ref b) => write!(f, "{:?} -> ({:?})", *a, *b)
         }
-    }
-}
-
-impl FromStr for Atom {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        s.parse::<i64>()
-            .map_err(|_| {String::from(format!("Not a valid integer: {}", s))})
-            .map(Atom::Int)
-            .or_else(|_| {Op::from_str(s).map(Atom::BuiltIn)})
-            .or_else(|_| {Ok(Atom::Var(String::from(s)))})
     }
 }
 

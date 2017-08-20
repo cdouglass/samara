@@ -8,31 +8,11 @@ use std::str::Chars;
 pub enum Token {
     Open,
     Close,
-    Atom(String)
-}
-
-#[derive(PartialEq)]
-enum TokenType {
-    Int,
-    Op,
-    Var,
-    Open,
-    Close
-}
-
-fn token_type_from_char(&c: &char) -> Option<TokenType> {
-    if c.is_numeric() {
-        Some(TokenType::Int)
-    } else if c.is_alphabetic() {
-        Some(TokenType::Var)
-    } else {
-        match c {
-            '('                     => Some(TokenType::Open),
-            ')'                     => Some(TokenType::Close),
-            '+'|'-'|'*'|'/'|'^'|'%' => Some(TokenType::Op),
-            _                       => None
-        }
-    }
+    Lambda,
+    Arrow,
+    Identifier(String),
+    Number(String),
+    Operator(String)
 }
 
 pub struct Lexer<'a> {
@@ -48,39 +28,78 @@ pub fn build_lexer(expr: &str) -> Lexer {
 impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Token> {
-        let mut token_type = None;
-        let mut token_so_far = None;
+        let mut token = None;
+
+        fn is_operator(c: char) -> bool {
+            match c {
+                '+'|'-'|'*'|'/'|'^'|'%'|'<'|'>' => true,
+                _ => false
+            }
+        }
+
         loop {
             // map to prevent borrow of self.it
             // https://stackoverflow.com/questions/26920789/unable-to-borrow-an-iterator-as-mutable-more-than-once-at-a-time
-            let c = self.it.peek().map(|c| {*c});
-            match c {
-                Some(ref ch) => {
-                    match token_so_far {
-                        Some(Token::Open) | Some(Token::Close) => { return token_so_far; },
-                        Some(Token::Atom(s)) => {
-                            if token_type == token_type_from_char(ch) {
-                                token_so_far = Some(Token::Atom(s + &ch.to_string()));
+            let ch = self.it.peek().cloned();
+            match token {
+                Some(Token::Open) | Some(Token::Close) | Some(Token::Lambda) | Some(Token::Arrow) => {
+                    return token;
+                },
+                Some(Token::Identifier(s)) => {
+                    match ch {
+                        Some(c) => {
+                            if c.is_alphabetic() {
                                 self.it.next();
-                            } else {
-                                return Some(Token::Atom(s));
-                            }
+                                token = Some(Token::Identifier(s + &c.to_string()));
+                            } else { return Some(Token::Identifier(s)); }
                         },
-                        None => {
-                            self.it.next();
-                            match token_type_from_char(ch) {
-                                Some(TokenType::Open) => { token_so_far = Some(Token::Open); },
-                                Some(TokenType::Close) => { return Some(Token::Close); },
-                                Some(tt) => {
-                                    token_type = Some(tt);
-                                    token_so_far = Some(Token::Atom(ch.to_string()));
-                                },
-                                None => { }
-                            }
+                        None => { return Some(Token::Identifier(s)); }
+                    }
+                },
+                Some(Token::Number(s)) => {
+                    match ch {
+                        Some(c) => {
+                            if c.is_numeric() {
+                                self.it.next();
+                                token = Some(Token::Number(s + &c.to_string()));
+                            } else { return Some(Token::Number(s)); }
+                        },
+                        None => { return Some(Token::Number(s)); }
+                    }
+                },
+                Some(Token::Operator(s)) => {
+                    if s == "->" {
+                        token = Some(Token::Arrow);
+                    } else {
+                        match ch {
+                            Some(c) => {
+                                if is_operator(c) {
+                                    self.it.next();
+                                    token = Some(Token::Operator(s + &c.to_string()));
+                                } else { return Some(Token::Operator(s)); }
+                            },
+                            None => { return Some(Token::Operator(s)); }
                         }
                     }
                 },
-                None => { return token_so_far; }
+                None => {
+                    match ch {
+                        Some('(')  => { token = Some(Token::Open) },
+                        Some(')')  => { token = Some(Token::Close) },
+                        Some('\\') => { token = Some(Token::Lambda) },
+                        Some(c) => {
+                            if is_operator(c) {
+                                token = Some(Token::Operator(c.to_string()));
+                            } else if c.is_alphabetic() {
+                                token = Some(Token::Identifier(c.to_string()));
+                            } else if c.is_numeric() {
+                                token = Some(Token::Number(c.to_string()));
+                            }
+                        },
+                        None => { return None; }
+                    }
+                    self.it.next();
+                }
             }
         }
     }

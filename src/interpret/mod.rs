@@ -20,10 +20,6 @@ pub fn evaluate(expr: &str) -> Result<Term, String> {
 
 fn reduce(ast: Term) -> Result<Term, String> {
     match ast {
-        Atom(a) => match a {
-            Var(s) => Err(format!("Undefined variable: {}", s)),
-            _ => Ok(Atom(a))
-        },
         App(func, arg) => {
             let f = reduce(*func);
             let a = reduce(*arg);
@@ -31,7 +27,8 @@ fn reduce(ast: Term) -> Result<Term, String> {
                 (Ok(f), Ok(a)) => apply(f, a),
                 _ => Err(String::from("Type error"))
             }
-        }
+        },
+        a => Ok(a)
     }
 }
 
@@ -42,7 +39,6 @@ fn apply(func: Term, arg: Term) -> Result<Term, String> {
             match a {
                 BuiltIn(op) => Ok(App(Box::new(Atom(BuiltIn(op))), Box::new(arg))),
                 Int(_) => Err(type_err),
-                Var(s) => Err(format!("Undefined variable: {}", s))
             }
         },
         App(f, g) => {
@@ -58,6 +54,10 @@ fn apply(func: Term, arg: Term) -> Result<Term, String> {
                 })),
                 _ => Err(type_err)
             }
+        },
+        Lambda(t) => {
+            Err(String::from("Not implemented: Lambda application"))
         }
+        Var(_) => Err(type_err)
     }
 }

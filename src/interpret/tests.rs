@@ -8,7 +8,7 @@ use interpret::types::Term;
 #[test]
 fn test_lex() {
     let input = "(5  5 * / // +34()";
-    let expected = [Token::Open, Token::Atom(String::from("5")), Token::Atom(String::from("5")), Token::Atom(String::from("*")), Token::Atom(String::from("/")), Token::Atom(String::from("//")), Token::Atom(String::from("+")), Token::Atom(String::from("34")), Token::Open, Token::Close];
+    let expected = [Token::Open, Token::Number(String::from("5")), Token::Number(String::from("5")), Token::Operator(String::from("*")), Token::Operator(String::from("/")), Token::Operator(String::from("//")), Token::Operator(String::from("+")), Token::Number(String::from("34")), Token::Open, Token::Close];
     let actual : Vec<Token>  = build_lexer(input).collect();
     println!("expected: {:?}", expected);
     println!("actual: {:?}", actual);
@@ -41,8 +41,8 @@ fn assert_evaluates_to_atom(expr: &str, expected: Atom) {
 
 #[test]
 fn test_empty_input() {
-    assert_evaluation_err("", "Empty expression");
-    assert_evaluation_err("()", "Empty expression");
+    assert_evaluation_err("", "Unexpected end of input");
+    assert_evaluation_err("()", "Unexpected end of input");
 }
 
 #[test]
@@ -56,13 +56,6 @@ fn test_unbalanced_delimiters() {
 #[test]
 fn test_too_many_arguments() {
     assert_evaluation_err("(* 1 2 3)", "Type error");
-}
-
-/* Other errors */
-
-#[test]
-fn test_undefined_variable() {
-    assert_evaluation_err("x", "Undefined variable: x");
 }
 
 /* Evaluating valid input */
