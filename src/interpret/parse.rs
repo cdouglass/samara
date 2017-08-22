@@ -37,9 +37,16 @@ fn parse_term(tokens: &mut Lexer, mut paren_depth: &mut i64, mut context: &mut V
                 match (tokens.next(), tokens.next()) {
                     (Some(Token::Identifier(s)), Some(Token::Arrow)) => {
                         context.push(s.clone());
+                        let pd0 = paren_depth.clone();
                         let body = parse_term(tokens, &mut paren_depth, &mut context);
                         context.pop();
-                        body.map(|b| Term::Lambda(Box::new(b), s))
+                        let result = body.map(|b| Term::Lambda(Box::new(b), s));
+                        if pd0 > *paren_depth {
+                            // ensure that, on CLOSE, recursive call from OPEN
+                            // case returns all the way to matching level
+                            // instead of stopping here
+                            return result;
+                        } else { result }
                     },
                     _ => Err(String::from("Syntax error in lambda expression"))
                 }
@@ -69,7 +76,10 @@ fn parse_term(tokens: &mut Lexer, mut paren_depth: &mut i64, mut context: &mut V
 
         match next_term_result {
             Ok(nt) => match term_so_far {
-                Some(t) => { term_so_far = Some(Term::App(Box::new(t), Box::new(nt))); },
+                Some(t) => {
+                    println!("Application: Combining old term {:?} with new term {:?}", t, nt);
+                    term_so_far = Some(Term::App(Box::new(t), Box::new(nt)));
+                },
                 None => { term_so_far = Some(nt); }
             },
             Err(msg) => { return Err(msg); }

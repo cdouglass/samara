@@ -5,12 +5,14 @@ use std::str::FromStr;
 
 use self::Op::*;
 
+#[derive(Clone)]
 #[derive(PartialEq)]
 pub enum Atom {
     BuiltIn(Op),
     Int(i64),
 }
 
+#[derive(Clone)]
 #[derive(PartialEq)]
 pub enum Op {
     Add,
@@ -21,6 +23,8 @@ pub enum Op {
     Exp
 }
 
+#[derive(Clone)]
+#[derive(PartialEq)]
 pub enum Term {
     Atom(Atom),
     App(Box<Term>, Box<Term>),
@@ -62,7 +66,7 @@ impl Debug for Term {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
             Term::Atom(ref a) => write!(f, "{:?}", a),
-            Term::App(ref a, ref b) => write!(f, "{:?} {:?}", a, b),
+            Term::App(ref a, ref b) => write!(f, "{:?} {{{:?}}}", a, b),
             Term::Lambda(ref t, ref name) => write!(f, "\\{} -> ({:?})", name, t),
             Term::Var(_, ref name) => write!(f, "{}", name)
         }

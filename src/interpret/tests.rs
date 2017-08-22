@@ -1,4 +1,5 @@
 use interpret::evaluate;
+use interpret::parse;
 use interpret::tokenize::build_lexer;
 use interpret::tokenize::Token;
 use interpret::types::Atom;
@@ -37,7 +38,24 @@ fn assert_evaluates_to_atom(expr: &str, expected: Atom) {
     }
 }
 
-/* Syntax errors */
+/* Parsing */
+
+#[test]
+fn test_parses_lambda_application() {
+    let ast = parse(&mut build_lexer("(\\x -> (\\y -> 3)) 2"));
+    let expected =
+        Term::App(
+            Box::new(Term::Lambda(
+                Box::new(Term::Lambda(Box::new(Term::Atom(Atom::Int(3))), String::from("y"))),
+                "x".to_string()
+            )),
+            Box::new(Term::Atom(Atom::Int(2)))
+            );
+
+    assert_eq!(ast, Ok(expected));
+}
+
+    /* Syntax errors */
 
 #[test]
 fn test_empty_input() {

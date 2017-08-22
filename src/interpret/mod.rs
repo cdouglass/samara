@@ -28,7 +28,15 @@ fn reduce(ast: Term) -> Result<Term, String> {
                 _ => Err(String::from("Type error"))
             }
         },
-        a => Ok(a)
+        Atom(a) => {
+            Ok(Atom(a))
+        },
+        Lambda(body, s) => {
+            Ok(Lambda(Box::new(*body), s))
+        },
+        Var(n, s) => {
+            Ok(Var(n, s))
+        }
     }
 }
 
@@ -55,9 +63,67 @@ fn apply(func: Term, arg: Term) -> Result<Term, String> {
                 _ => Err(type_err)
             }
         },
-        Lambda(_, _) => {
-            Err(String::from("Not implemented: Lambda application"))
-        }
+        Lambda(body, _) => {
+            reduce(unshift_indices(sub_at_index(*body, arg.clone(), 0), 1))
+        },
         Var(_, _) => Err(type_err)
+    }
+}
+
+// no evaluation, so can't go wrong
+fn sub_at_index(body: Term, t: Term, index: usize) -> Term {
+    match body {
+        App(a, b) => {
+            let subbed_a = sub_at_index(*a, t.clone(), index);
+            let subbed_b = sub_at_index(*b, t, index);
+            App(Box::new(subbed_a), Box::new(subbed_b))
+        },
+        Lambda(lambda_body, s) => {
+            let new_lambda_body = sub_at_index(*lambda_body, t, index + 1);
+            Lambda(Box::new(new_lambda_body), s)
+        },
+        Var(n, s) => {
+            if n == index {
+                shift_indices(t.clone(), index, 0)
+            } else { Var(n, s) }
+        },
+        Atom(a) => Atom(a)
+    }
+}
+
+fn shift_indices(term: Term, distance: usize, cutoff: usize) -> Term {
+    match term {
+        App(a, b) => {
+            let a_ = shift_indices(*a, distance, cutoff);
+            let b_ = shift_indices(*b, distance, cutoff);
+            App(Box::new(a_), Box::new(b_))
+        }, Lambda(lambda_body, s) => {
+            Lambda(Box::new(shift_indices(*lambda_body, distance, cutoff + 1)), s)
+        },
+        Var(n, s) => {
+            if n >= cutoff {
+                Var(n+1, s)
+            } else { Var(n, s) }
+        },
+        Atom(a) => Atom(a)
+    }
+}
+
+fn unshift_indices(term: Term, cutoff: usize) -> Term {
+    match term {
+        App(a, b) => {
+            let a_ = unshift_indices(*a, cutoff);
+            let b_ = unshift_indices(*b, cutoff);
+            App(Box::new(a_), Box::new(b_))
+        },
+        Lambda(lambda_body, s) => {
+            Lambda(Box::new(unshift_indices(*lambda_body, cutoff + 1)), s)
+        },
+        Var(n, s) => {
+            if n >= cutoff {
+                Var(n-1, s)
+            } else { Var(n, s) }
+        },
+        Atom(a) => Atom(a)
     }
 }
