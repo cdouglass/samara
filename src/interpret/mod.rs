@@ -68,6 +68,9 @@ fn apply(func: Term, arg: Term) -> Result<Term, String> {
                         Div => Int(m / n),
                         Mod => Int(m % n),
                         Exp => Int(m ^ n),
+                        Eql => Bool(m == n),
+                        Gt  => Bool(m > n),
+                        Lt  => Bool(m < n),
                 })),
                 _ => Err(type_err)
             }

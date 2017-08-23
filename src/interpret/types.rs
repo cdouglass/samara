@@ -21,7 +21,10 @@ pub enum Op {
     Mul,
     Div,
     Mod,
-    Exp
+    Exp,
+    Eql,
+    Gt,
+    Lt
 }
 
 #[derive(Clone)]
@@ -49,7 +52,10 @@ impl Debug for Op {
             Mul => "*" ,
             Div => "//",
             Mod => "%" ,
-            Exp => "^"
+            Exp => "^",
+            Eql => "==",
+            Gt  => ">",
+            Lt  => "<",
         };
         write!(f, "{}", s)
     }
@@ -97,6 +103,9 @@ impl FromStr for Op {
             "//" => Ok(Div),
             "%"  => Ok(Mod),
             "^"  => Ok(Exp),
+            "==" => Ok(Eql),
+            ">"  => Ok(Gt),
+            "<"  => Ok(Lt),
             _    => Err(format!("Unknown operator {}", s))
         }
     }

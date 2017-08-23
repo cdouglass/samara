@@ -32,7 +32,7 @@ impl<'a> Iterator for Lexer<'a> {
 
         fn is_operator(c: char) -> bool {
             match c {
-                '+'|'-'|'*'|'/'|'^'|'%'|'<'|'>' => true,
+                '+'|'-'|'*'|'/'|'^'|'%'|'<'|'>'|'=' => true,
                 _ => false
             }
         }
