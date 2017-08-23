@@ -104,6 +104,12 @@ fn test_partially_apply_op() {
 }
 
 #[test]
+fn test_factorial() {
+    let expr = "((\\f -> (\\x -> f (\\y -> x x y)) (\\x -> f (\\y -> x x y))) (\\fct -> (\\n -> if (< n 3) then n else (* n (fct (- n 1)))))) 8";
+    assert_evaluates_to_atom(expr, Atom::Int(40320));
+}
+
+#[test]
 fn test_fully_apply_op() {
     assert_evaluates_to_atom("(// 12 3)", Atom::Int(4));
 }
