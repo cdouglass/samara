@@ -53,10 +53,20 @@ fn parse_term(tokens: &mut Lexer, mut paren_depth: &mut i64, mut context: &mut V
             },
             Some(Token::Arrow) => Err(String::from("Syntax error: -> found outside lambda expression")),
             Some(Token::Identifier(ref s)) => {
-                let mut stack = context.iter().rev();
-                match stack.position(|x| x == s) {
-                    Some(k) => Ok(Term::Var(k, s.clone())),
-                    None => Err(String::from(format!("Error: Undefined variable {}", s)))
+                if s == "if" {
+                    parse_conditional(tokens, &mut paren_depth, &mut context)
+                } else if s == "then" || s == "else" {
+                        break;
+                } else if s == "True" {
+                    Ok(Term::Atom(Atom::Bool(true)))
+                } else if s == "False" {
+                        Ok(Term::Atom(Atom::Bool(false)))
+                } else {
+                    let mut stack = context.iter().rev();
+                    match stack.position(|x| x == s) {
+                        Some(k) => Ok(Term::Var(k, s.clone())),
+                        None => Err(String::from(format!("Error: Undefined variable {}", s)))
+                    }
                 }
             },
             Some(Token::Number(s)) => {
@@ -89,5 +99,15 @@ fn parse_term(tokens: &mut Lexer, mut paren_depth: &mut i64, mut context: &mut V
     match term_so_far {
         Some(term) => Ok(term),
         None => Err(end_of_input_msg)
+    }
+}
+
+fn parse_conditional(tokens: &mut Lexer, mut paren_depth: &mut i64, mut context: &mut Vec<String>) -> Result<Term, String> {
+    let predicate = parse_term(tokens, paren_depth, context);
+    let true_case = parse_term(tokens, paren_depth, context);
+    let false_case = parse_term(tokens, paren_depth, context);
+    match (predicate, true_case, false_case) {
+        (Ok(p), Ok(t), Ok(f)) => Ok(Term::Conditional(Box::new(p), Box::new(t), Box::new(f))),
+        (Err(msg), _, _) | (_, Err(msg), _) | (_, _, Err(msg)) => Err(msg)
     }
 }

@@ -36,6 +36,14 @@ fn reduce(ast: Term) -> Result<Term, String> {
         },
         Var(n, s) => {
             Ok(Var(n, s))
+        },
+        Conditional(pred, true_case, false_case) => {
+            match reduce(*pred) {
+                Ok(Term::Atom(Bool(true))) => reduce(*true_case),
+                Ok(Term::Atom(Bool(false))) => reduce(*false_case),
+                Ok(_) => panic!(),
+                Err(msg) => Err(msg)
+            }
         }
     }
 }
@@ -47,6 +55,7 @@ fn apply(func: Term, arg: Term) -> Result<Term, String> {
             match a {
                 BuiltIn(op) => Ok(App(Box::new(Atom(BuiltIn(op))), Box::new(arg))),
                 Int(_) => Err(type_err),
+                Bool(_) => Err(type_err),
             }
         },
         App(f, g) => {
@@ -66,6 +75,7 @@ fn apply(func: Term, arg: Term) -> Result<Term, String> {
         Lambda(body, _) => {
             reduce(unshift_indices(sub_at_index(*body, arg.clone(), 0), 1))
         },
+        Conditional(_, _, _) => Err(type_err),
         Var(_, _) => Err(type_err)
     }
 }
@@ -87,6 +97,12 @@ fn sub_at_index(body: Term, t: Term, index: usize) -> Term {
                 shift_indices(t.clone(), index, 0)
             } else { Var(n, s) }
         },
+        Conditional(pred, true_case, false_case) => {
+            let subbed_pred = sub_at_index(*pred, t.clone(), index);
+            let subbed_true_case = sub_at_index(*true_case, t.clone(), index);
+            let subbed_false_case = sub_at_index(*false_case, t.clone(), index);
+            Conditional(Box::new(subbed_pred), Box::new(subbed_true_case), Box::new(subbed_false_case))
+        },
         Atom(a) => Atom(a)
     }
 }
@@ -104,6 +120,12 @@ fn shift_indices(term: Term, distance: usize, cutoff: usize) -> Term {
             if n >= cutoff {
                 Var(n+1, s)
             } else { Var(n, s) }
+        },
+        Conditional(pred, true_case, false_case) => {
+            let shifted_pred = shift_indices(*pred, distance, cutoff);
+            let shifted_true_case = shift_indices(*true_case, distance, cutoff);
+            let shifted_false_case = shift_indices(*false_case, distance, cutoff);
+            Conditional(Box::new(shifted_pred), Box::new(shifted_true_case), Box::new(shifted_false_case))
         },
         Atom(a) => Atom(a)
     }
@@ -123,6 +145,12 @@ fn unshift_indices(term: Term, cutoff: usize) -> Term {
             if n >= cutoff {
                 Var(n-1, s)
             } else { Var(n, s) }
+        },
+        Conditional(pred, true_case, false_case) => {
+            let unshifted_pred = unshift_indices(*pred, cutoff);
+            let unshifted_true_case = unshift_indices(*true_case, cutoff);
+            let unshifted_false_case = unshift_indices(*false_case, cutoff);
+            Conditional(Box::new(unshifted_pred), Box::new(unshifted_true_case), Box::new(unshifted_false_case))
         },
         Atom(a) => Atom(a)
     }

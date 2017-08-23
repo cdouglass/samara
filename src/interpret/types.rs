@@ -10,6 +10,7 @@ use self::Op::*;
 pub enum Atom {
     BuiltIn(Op),
     Int(i64),
+    Bool(bool)
 }
 
 #[derive(Clone)]
@@ -29,7 +30,8 @@ pub enum Term {
     Atom(Atom),
     App(Box<Term>, Box<Term>),
     Lambda(Box<Term>, String), // uses de Bruijn indices internally, but keeps name for debugging
-    Var(usize, String)
+    Var(usize, String),
+    Conditional(Box<Term>, Box<Term>, Box<Term>) // predicate, true case, false case
 }
 
 #[derive(Clone)]
@@ -57,7 +59,8 @@ impl Debug for Atom {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
             Atom::Int(n) => write!(f, "{}", n),
-            Atom::BuiltIn(ref op) => write!(f, "{:?}", op)
+            Atom::BuiltIn(ref op) => write!(f, "{:?}", op),
+            Atom::Bool(b) => write!(f, "{:?}", b)
         }
     }
 }
@@ -68,7 +71,8 @@ impl Debug for Term {
             Term::Atom(ref a) => write!(f, "{:?}", a),
             Term::App(ref a, ref b) => write!(f, "{:?} {{{:?}}}", a, b),
             Term::Lambda(ref t, ref name) => write!(f, "\\{} -> ({:?})", name, t),
-            Term::Var(_, ref name) => write!(f, "{}", name)
+            Term::Var(_, ref name) => write!(f, "{}", name),
+            Term::Conditional(ref pred, ref true_case, ref false_case) => write!(f, "IF {:?} THEN {:?} ELSE {:?}", pred, true_case, false_case)
         }
     }
 }
