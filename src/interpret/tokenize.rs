@@ -19,10 +19,10 @@ pub struct Lexer<'a> {
     it: Peekable<Chars<'a>>
 }
 
-pub fn build_lexer(expr: &str) -> Lexer {
+pub fn build_lexer(expr: &str) -> Peekable<Lexer> {
     Lexer {
         it: expr.chars().peekable(),
-    }
+    }.peekable()
 }
 
 impl<'a> Iterator for Lexer<'a> {

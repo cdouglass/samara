@@ -54,8 +54,7 @@ fn apply(func: Term, arg: Term) -> Result<Term, String> {
         Atom(a) => {
             match a {
                 BuiltIn(op) => Ok(App(Box::new(Atom(BuiltIn(op))), Box::new(arg))),
-                Int(_) => Err(type_err),
-                Bool(_) => Err(type_err),
+                Int(_) | Bool(_) => Err(type_err)
             }
         },
         App(f, g) => {
@@ -78,8 +77,7 @@ fn apply(func: Term, arg: Term) -> Result<Term, String> {
         Lambda(body, _) => {
             reduce(unshift_indices(sub_at_index(*body, arg.clone(), 0), 1))
         },
-        Conditional(_, _, _) => Err(type_err),
-        Var(_, _) => Err(type_err)
+        Conditional(_, _, _) | Var(_, _) => Err(type_err)
     }
 }
 
