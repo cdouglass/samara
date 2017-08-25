@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use interpret::tokenize::Lexer;
 use interpret::tokenize::Token;
+use interpret::tokenize::Keyword::*;
 
 use interpret::types::Atom;
 use interpret::types::Op;
@@ -35,44 +36,43 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut cont
                         tokens.next();
                         break;
                     },
-                    Some(Token::Arrow) => { break; },
+                    Some(Token::Keyword(Arrow)) => { break; },
                     _ => { return close_err; }
                 }
             },
             Some(Token::Lambda) => {
                 tokens.next();
                 match (tokens.next(), tokens.next()) {
-                    (Some(Token::Identifier(s)), Some(Token::Arrow)) => {
+                    (Some(Token::Identifier(s)), Some(Token::Keyword(Arrow))) => {
                         context.push(s.clone());
-                        stack.push(Token::Arrow);
+                        stack.push(Token::Keyword(Arrow));
                         let body = parse_term(tokens, &mut stack, &mut context);
                         context.pop();
                         let result = body.map(|b| Term::Lambda(Box::new(b), s));
                         match stack.pop() {
-                            Some(Token::Arrow) => { result },
+                            Some(Token::Keyword(Arrow)) => { result },
                             _ => { return lambda_syntax_err; }
                         }
                     },
                     _ => lambda_syntax_err.clone()
                 }
             },
-            Some(Token::Arrow) => { return lambda_syntax_err; },
+            Some(Token::Keyword(k)) => {
+                tokens.next();
+                match k {
+                    Arrow => { return lambda_syntax_err; },
+                    If => parse_conditional(tokens, &mut stack, &mut context),
+                    True => { Ok(Term::Atom(Atom::Bool(true))) },
+                    False => { Ok(Term::Atom(Atom::Bool(false))) },
+                    _ => { break; }
+                }
+            },
             Some(Token::Identifier(ref s)) => {
                 tokens.next();
-                if s == "if" {
-                    parse_conditional(tokens, &mut stack, &mut context)
-                } else if s == "then" || s == "else" {
-                        break;
-                } else if s == "True" {
-                    Ok(Term::Atom(Atom::Bool(true)))
-                } else if s == "False" {
-                        Ok(Term::Atom(Atom::Bool(false)))
-                } else {
-                    let mut stack = context.iter().rev();
-                    match stack.position(|x| x == s) {
-                        Some(k) => Ok(Term::Var(k, s.clone())),
-                        None => Err(String::from(format!("Error: Undefined variable {}", s)))
-                    }
+                let mut stack = context.iter().rev();
+                match stack.position(|x| x == s) {
+                    Some(k) => Ok(Term::Var(k, s.clone())),
+                    None => Err(String::from(format!("Error: Undefined variable {}", s)))
                 }
             },
             Some(Token::Number(s)) => {

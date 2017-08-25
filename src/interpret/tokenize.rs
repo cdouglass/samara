@@ -1,6 +1,7 @@
 use std::iter::Iterator;
 use std::iter::Peekable;
 use std::str::Chars;
+use std::str::FromStr;
 
 #[derive(PartialEq)]
 #[derive(Debug)]
@@ -9,10 +10,38 @@ pub enum Token {
     Open,
     Close,
     Lambda,
-    Arrow,
+    Keyword(Keyword),
     Identifier(String),
     Number(String),
     Operator(String)
+}
+
+#[derive(PartialEq)]
+#[derive(Debug)]
+#[derive(Clone)]
+pub enum Keyword {
+    Arrow,
+    If,
+    Then,
+    Else,
+    True,
+    False
+}
+
+impl FromStr for Keyword {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "->"    => Ok(Keyword::Arrow),
+            "if"    => Ok(Keyword::If),
+            "then"  => Ok(Keyword::Then),
+            "else"  => Ok(Keyword::Else),
+            "True"  => Ok(Keyword::True),
+            "False" => Ok(Keyword::False),
+            _       => Err(())
+        }
+    }
 }
 
 pub struct Lexer<'a> {
@@ -41,46 +70,24 @@ impl<'a> Iterator for Lexer<'a> {
             // map to prevent borrow of self.it
             // https://stackoverflow.com/questions/26920789/unable-to-borrow-an-iterator-as-mutable-more-than-once-at-a-time
             let ch = self.it.peek().cloned();
-            match token {
-                Some(Token::Open) | Some(Token::Close) | Some(Token::Lambda) | Some(Token::Arrow) => {
+            match token.clone() {
+                Some(Token::Open) | Some(Token::Close) | Some(Token::Lambda) | Some(Token::Keyword(_)) => {
                     return token;
                 },
                 Some(Token::Identifier(s)) => {
-                    match ch {
-                        Some(c) => {
-                            if c.is_alphabetic() {
-                                self.it.next();
-                                token = Some(Token::Identifier(s + &c.to_string()));
-                            } else { return Some(Token::Identifier(s)); }
-                        },
-                        None => { return Some(Token::Identifier(s)); }
-                    }
+                    if update_if_match(s, ch, &Token::Identifier, &(|x| x.is_alphabetic()), &mut token) {
+                        self.it.next();
+                    } else { break; }
                 },
                 Some(Token::Number(s)) => {
-                    match ch {
-                        Some(c) => {
-                            if c.is_numeric() {
-                                self.it.next();
-                                token = Some(Token::Number(s + &c.to_string()));
-                            } else { return Some(Token::Number(s)); }
-                        },
-                        None => { return Some(Token::Number(s)); }
-                    }
+                    if update_if_match(s, ch, &Token::Number, &(|x| x.is_numeric()), &mut token) {
+                        self.it.next();
+                    } else { break; }
                 },
                 Some(Token::Operator(s)) => {
-                    if s == "->" {
-                        token = Some(Token::Arrow);
-                    } else {
-                        match ch {
-                            Some(c) => {
-                                if is_operator(c) {
-                                    self.it.next();
-                                    token = Some(Token::Operator(s + &c.to_string()));
-                                } else { return Some(Token::Operator(s)); }
-                            },
-                            None => { return Some(Token::Operator(s)); }
-                        }
-                    }
+                    if update_if_match(s, ch, &Token::Operator, &is_operator, &mut token) {
+                        self.it.next();
+                    } else { break; }
                 },
                 None => {
                     match ch {
@@ -96,11 +103,28 @@ impl<'a> Iterator for Lexer<'a> {
                                 token = Some(Token::Number(c.to_string()));
                             }
                         },
-                        None => { return None; }
+                        None => { break; }
                     }
                     self.it.next();
                 }
             }
         }
+        match token.clone() {
+            Some(Token::Identifier(ref s)) | Some(Token::Operator(ref s)) => {
+                match Keyword::from_str(s) {
+                    Ok(k) => Some(Token::Keyword(k)),
+                    _ => token
+                }
+            }
+            _ => token
+        }
     }
+}
+
+fn update_if_match(s: String, ch: Option<char>, constructor: &Fn(String) -> Token, predicate: &Fn(char) -> bool, token: &mut Option<Token>) -> bool {
+    ch.map(|c| {
+        let p = predicate(c);
+        if p { *token = Some(constructor(s + &c.to_string())); }
+        p
+    }).unwrap_or(false)
 }
