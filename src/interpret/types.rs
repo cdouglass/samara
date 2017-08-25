@@ -35,7 +35,8 @@ pub enum Term {
     Lambda(Box<Term>, String), // uses de Bruijn indices internally, but keeps name for debugging
     Var(usize, String),
     Conditional(Box<Term>, Box<Term>, Box<Term>), // predicate, true case, false case
-    Let(String, Box<Term>, Box<Term>) // variable name, value, body (only one binding per let, for now)
+    Let(String, Box<Term>, Box<Term>), // variable name, value, body (only one binding per let, for now)
+    SessionVar(String) // variable bound in let from previous input
 }
 
 #[derive(Clone)]
@@ -80,7 +81,8 @@ impl Debug for Term {
             Term::Lambda(ref t, ref name) => write!(f, "\\{} -> ({:?})", name, t),
             Term::Var(_, ref name) => write!(f, "{}", name),
             Term::Conditional(ref pred, ref true_case, ref false_case) => write!(f, "IF {:?} THEN {:?} ELSE {:?}", pred, true_case, false_case),
-            Term::Let(ref name, ref value, ref body) => write!(f, "LET {} = {:?} IN {:?}", name, value, body)
+            Term::Let(ref name, ref value, ref body) => write!(f, "LET {} = {:?} IN {:?}", name, value, body),
+            Term::SessionVar(ref name) => write!(f, "{}", name)
         }
     }
 }

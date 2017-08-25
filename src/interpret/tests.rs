@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use interpret::evaluate;
 use interpret::parse;
 use interpret::tokenize::build_lexer;
@@ -18,8 +20,8 @@ fn test_lex() {
 
 /* Test helpers */
 
-fn assert_evaluation_err(expr: &str, msg: &str) {
-    match evaluate(expr) {
+fn assert_evaluation_err(expr: &str, mut bindings: &mut HashMap<String, Term>, msg: &str) {
+    match evaluate(expr, bindings) {
         Err(m) => { assert_eq!(m, msg) },
         result => {
             println!("Expected Err({}). Instead got {:?}", msg, result);
@@ -28,8 +30,8 @@ fn assert_evaluation_err(expr: &str, msg: &str) {
     }
 }
 
-fn assert_evaluates_to_atom(expr: &str, expected: Atom) {
-    match evaluate(expr).unwrap() {
+fn assert_evaluates_to_atom(expr: &str, mut bindings: &mut HashMap<String, Term>,  expected: Atom) {
+    match evaluate(expr, &mut bindings).unwrap() {
         Term::Atom(a) => assert_eq!(a, expected),
         result => {
             println!("Expected {:?}. Instead got {:?}", expected, result);
@@ -42,7 +44,7 @@ fn assert_evaluates_to_atom(expr: &str, expected: Atom) {
 
 #[test]
 fn test_parses_lambda_application() {
-    let ast = parse(&mut build_lexer("(\\x -> (\\y -> 3)) 2"));
+    let ast = parse(&mut build_lexer("(\\x -> (\\y -> 3)) 2"), &mut HashMap::new());
     let expected =
         Term::App(
             Box::new(Term::Lambda(
@@ -59,39 +61,39 @@ fn test_parses_lambda_application() {
 
 #[test]
 fn test_empty_input() {
-    assert_evaluation_err("", "Unexpected end of input");
-    assert_evaluation_err("()", "Unexpected end of input");
+    assert_evaluation_err("", &mut HashMap::new(), "Unexpected end of input");
+    assert_evaluation_err("()", &mut HashMap::new(), "Unexpected end of input");
 }
 
 #[test]
 fn test_unbalanced_delimiters() {
-    assert_evaluation_err("(+ 5 8))", "Unexpected CLOSE delimiter");
-    assert_evaluation_err("(+ 5 (8)", "Unexpected end of input");
+    assert_evaluation_err("(+ 5 8))", &mut HashMap::new(), "Unexpected CLOSE delimiter");
+    assert_evaluation_err("(+ 5 (8)", &mut HashMap::new(), "Unexpected end of input");
 }
 
 /* Type errors */
 
 #[test]
 fn test_too_many_arguments() {
-    assert_evaluation_err("(* 1 2 3)", "Type error");
+    assert_evaluation_err("(* 1 2 3)", &mut HashMap::new(), "Type error");
 }
 
 /* Evaluating valid input */
 
 #[test]
 fn test_evaluate_int() {
-    assert_evaluates_to_atom("42", Atom::Int(42));
+    assert_evaluates_to_atom("42", &mut HashMap::new(), Atom::Int(42));
 }
 
 #[test]
 fn test_evaluate_op() {
-    assert_evaluates_to_atom("+", Atom::BuiltIn(Op::Add));
-    assert_evaluates_to_atom("//", Atom::BuiltIn(Op::Div));
+    assert_evaluates_to_atom("+", &mut HashMap::new(), Atom::BuiltIn(Op::Add));
+    assert_evaluates_to_atom("//", &mut HashMap::new(), Atom::BuiltIn(Op::Div));
 }
 
 #[test]
 fn test_partially_apply_op() {
-    let result = evaluate("(% 10)").unwrap();
+    let result = evaluate("(% 10)", &mut HashMap::new()).unwrap();
     match result {
         Term::App(a, b) => {
             match (*a, *b) {
@@ -105,22 +107,41 @@ fn test_partially_apply_op() {
 
 #[test]
 fn test_anonymous_factorial() {
-    let expr = "((\\f -> (\\x -> f (\\y -> x x y)) (\\x -> f (\\y -> x x y))) (\\fct -> (\\n -> if (< n 3) then n else (* n (fct (- n 1)))))) 8";
-    assert_evaluates_to_atom(expr, Atom::Int(40320));
+    let expr = "((\\f -> (\\x -> f (\\y -> x x y)) (\\x -> f (\\y -> x x y))) (\\fct -> (\\n -> if (< n 2) then 1 else (* n (fct (- n 1)))))) 8";
+    assert_evaluates_to_atom(expr, &mut HashMap::new(), Atom::Int(40320));
 }
 
 #[test]
 fn test_factorial_with_let() {
-    let expr = "let fact (\\n -> if (< n 3) then n else (* n (fact (- n 1)))) in fact 8";
-    assert_evaluates_to_atom(expr, Atom::Int(40320));
+    let expr = "let fact (\\n -> if (< n 2) then 1 else (* n (fact (- n 1)))) in fact 8";
+    assert_evaluates_to_atom(expr, &mut HashMap::new(), Atom::Int(40320));
 }
 
 #[test]
 fn test_fully_apply_op() {
-    assert_evaluates_to_atom("(// 12 3)", Atom::Int(4));
+    assert_evaluates_to_atom("(// 12 3)", &mut HashMap::new(), Atom::Int(4));
 }
 
 #[test]
 fn test_missing_outer_parens() {
-    assert_evaluates_to_atom("+ 10 10", Atom::Int(20));
+    assert_evaluates_to_atom("+ 10 10", &mut HashMap::new(), Atom::Int(20));
+}
+
+#[test]
+fn test_save_session_bindings() {
+    let expected = Ok(Term::Atom(Atom::Int(50)));
+
+    let mut bindings = HashMap::new();
+    let assignment_result = evaluate("let x (* 5 10)", &mut bindings);
+    assert_eq!(assignment_result, expected);
+
+    let reuse = evaluate("x", &mut bindings);
+    assert_eq!(reuse, expected);
+}
+
+#[test]
+fn test_recursive_session_bindings() {
+    let mut bindings = HashMap::new();
+    let fact = evaluate("let fact (\\n -> if (< n 2) then 1 else (* n (fact (- n 1))))", &mut bindings);
+    assert_evaluates_to_atom("fact 8", &mut bindings, Atom::Int(40320));
 }

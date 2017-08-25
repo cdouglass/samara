@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io;
 use std::io::Write;
 use std::iter::Iterator;
@@ -29,6 +30,7 @@ fn get_command(input: &str) -> Option<Command> {
 
 fn main() {
     println!("{}", GREETING);
+    let mut bindings = HashMap::new();
 
     loop {
         print!("{}", PROMPT);
@@ -43,7 +45,7 @@ fn main() {
             Some(Command::Help) => println!("{}", USAGE),
             Some(Command::Unknown) => println!("Unknown command"),
             None => {
-                let result = interpret::evaluate(&expr);
+                let result = interpret::evaluate(&expr, &mut bindings);
                 match result {
                     Ok(term) => println!("{:?}", term),
                     Err(msg) => println!("{}", msg)
