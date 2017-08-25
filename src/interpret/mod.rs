@@ -44,6 +44,9 @@ fn reduce(ast: Term) -> Result<Term, String> {
                 Ok(_) => panic!(),
                 Err(msg) => Err(msg)
             }
+        },
+        Let(name, value, body) => {
+            Err(String::from("not implemented"))
         }
     }
 }
@@ -77,13 +80,14 @@ fn apply(func: Term, arg: Term) -> Result<Term, String> {
         Lambda(body, _) => {
             reduce(unshift_indices(sub_at_index(*body, arg.clone(), 0), 1))
         },
-        Conditional(_, _, _) | Var(_, _) => Err(type_err)
+        Conditional(_, _, _) | Var(_, _) | Let(_, _, _) => Err(type_err)
     }
 }
 
 // no evaluation, so can't go wrong
 fn sub_at_index(body: Term, t: Term, index: usize) -> Term {
     match body {
+        Atom(a) => Atom(a),
         App(a, b) => {
             let subbed_a = sub_at_index(*a, t.clone(), index);
             let subbed_b = sub_at_index(*b, t, index);
@@ -104,12 +108,17 @@ fn sub_at_index(body: Term, t: Term, index: usize) -> Term {
             let subbed_false_case = sub_at_index(*false_case, t.clone(), index);
             Conditional(Box::new(subbed_pred), Box::new(subbed_true_case), Box::new(subbed_false_case))
         },
-        Atom(a) => Atom(a)
+        Let(name, value, let_body) => {
+            let subbed_value = sub_at_index(*value, t.clone(), index);
+            let subbed_let_body = sub_at_index(*let_body, t.clone(), index);
+            Let(name, Box::new(subbed_value), Box::new(subbed_let_body))
+        }
     }
 }
 
 fn shift_indices(term: Term, distance: usize, cutoff: usize) -> Term {
     match term {
+        Atom(a) => Atom(a),
         App(a, b) => {
             let a_ = shift_indices(*a, distance, cutoff);
             let b_ = shift_indices(*b, distance, cutoff);
@@ -128,12 +137,17 @@ fn shift_indices(term: Term, distance: usize, cutoff: usize) -> Term {
             let shifted_false_case = shift_indices(*false_case, distance, cutoff);
             Conditional(Box::new(shifted_pred), Box::new(shifted_true_case), Box::new(shifted_false_case))
         },
-        Atom(a) => Atom(a)
+        Let(name, value, body) => {
+            let shifted_value = shift_indices(*value, distance, cutoff);
+            let shifted_body = shift_indices(*body, distance, cutoff);
+            Let(name, Box::new(shifted_value), Box::new(shifted_body))
+        }
     }
 }
 
 fn unshift_indices(term: Term, cutoff: usize) -> Term {
     match term {
+        Atom(a) => Atom(a),
         App(a, b) => {
             let a_ = unshift_indices(*a, cutoff);
             let b_ = unshift_indices(*b, cutoff);
@@ -153,6 +167,10 @@ fn unshift_indices(term: Term, cutoff: usize) -> Term {
             let unshifted_false_case = unshift_indices(*false_case, cutoff);
             Conditional(Box::new(unshifted_pred), Box::new(unshifted_true_case), Box::new(unshifted_false_case))
         },
-        Atom(a) => Atom(a)
+        Let(name, value, body) => {
+            let unshifted_value = unshift_indices(*value, cutoff);
+            let unshifted_body = unshift_indices(*body, cutoff);
+            Let(name, Box::new(unshifted_value), Box::new(unshifted_body))
+        }
     }
 }
