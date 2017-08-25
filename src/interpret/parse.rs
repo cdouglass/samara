@@ -67,10 +67,9 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut cont
                     False => { Ok(Term::Atom(Atom::Bool(false))) },
                     Let   => parse_let(tokens, &mut stack, &mut context),
                     k    => {
-                        match stack.pop() {
-                            Some(Token::Keyword(k)) => { break; },
-                            _ => { return syntax_err; }
-                        }
+                        if stack.pop() == Some(Token::Keyword(k)) {
+                            break;
+                        } else { return syntax_err; }
                     },
                 }
             },
@@ -101,10 +100,7 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut cont
 
         match next_term_result {
             Ok(nt) => match term_so_far {
-                Some(t) => {
-                    println!("Application: Combining old term {:?} with new term {:?}", t, nt);
-                    term_so_far = Some(Term::App(Box::new(t), Box::new(nt)));
-                },
+                Some(t) => { term_so_far = Some(Term::App(Box::new(t), Box::new(nt))); },
                 None => { term_so_far = Some(nt); }
             },
             Err(msg) => { return Err(msg); }
@@ -137,12 +133,14 @@ fn parse_let(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut conte
 
     match tokens.next() {
         Some(Token::Identifier(s)) => {
-            let name = s;
+            let name = s.clone();
+            context.push(s.clone());
 
             stack.push(Token::Keyword(In));
             let value = parse_term(tokens, &mut stack, &mut context);
 
             let body = parse_term(tokens, &mut stack, &mut context);
+            context.pop();
             match (value, body) {
                 (Ok(v), Ok(b)) => Ok(Term::Let(name, Box::new(v), Box::new(b))),
                 (Err(msg), _) | (_, Err(msg)) => Err(msg)

@@ -46,7 +46,12 @@ fn reduce(ast: Term) -> Result<Term, String> {
             }
         },
         Let(name, value, body) => {
-            Err(String::from("not implemented"))
+            // for now, same as lambda application except with sugar for self-reference
+            // BUT will have to change once types are enforced
+            let mut fix_toks = build_lexer("(\\f -> (\\x -> f (\\y -> x x y)) (\\x -> f (\\y -> x x y)))");
+            let fix = parse(&mut fix_toks).unwrap();
+            let fixed_val = App(Box::new(fix), Box::new(Lambda(Box::new(*value), name)));
+            reduce(unshift_indices(sub_at_index(*body, fixed_val, 0), 1))
         }
     }
 }
@@ -78,8 +83,9 @@ fn apply(func: Term, arg: Term) -> Result<Term, String> {
             }
         },
         Lambda(body, _) => {
-            reduce(unshift_indices(sub_at_index(*body, arg.clone(), 0), 1))
+            reduce(unshift_indices(sub_at_index(*body, arg, 0), 1))
         },
+        // func is already reduced, so should not be in any of these forms
         Conditional(_, _, _) | Var(_, _) | Let(_, _, _) => Err(type_err)
     }
 }
@@ -109,8 +115,9 @@ fn sub_at_index(body: Term, t: Term, index: usize) -> Term {
             Conditional(Box::new(subbed_pred), Box::new(subbed_true_case), Box::new(subbed_false_case))
         },
         Let(name, value, let_body) => {
-            let subbed_value = sub_at_index(*value, t.clone(), index);
-            let subbed_let_body = sub_at_index(*let_body, t.clone(), index);
+            // increment index in both value and body, since let binding applies in both
+            let subbed_value = sub_at_index(*value, t.clone(), index + 1);
+            let subbed_let_body = sub_at_index(*let_body, t.clone(), index + 1);
             Let(name, Box::new(subbed_value), Box::new(subbed_let_body))
         }
     }
@@ -138,8 +145,8 @@ fn shift_indices(term: Term, distance: usize, cutoff: usize) -> Term {
             Conditional(Box::new(shifted_pred), Box::new(shifted_true_case), Box::new(shifted_false_case))
         },
         Let(name, value, body) => {
-            let shifted_value = shift_indices(*value, distance, cutoff);
-            let shifted_body = shift_indices(*body, distance, cutoff);
+            let shifted_value = shift_indices(*value, distance, cutoff + 1);
+            let shifted_body = shift_indices(*body, distance, cutoff + 1);
             Let(name, Box::new(shifted_value), Box::new(shifted_body))
         }
     }
@@ -168,8 +175,8 @@ fn unshift_indices(term: Term, cutoff: usize) -> Term {
             Conditional(Box::new(unshifted_pred), Box::new(unshifted_true_case), Box::new(unshifted_false_case))
         },
         Let(name, value, body) => {
-            let unshifted_value = unshift_indices(*value, cutoff);
-            let unshifted_body = unshift_indices(*body, cutoff);
+            let unshifted_value = unshift_indices(*value, cutoff + 1);
+            let unshifted_body = unshift_indices(*body, cutoff + 1);
             Let(name, Box::new(unshifted_value), Box::new(unshifted_body))
         }
     }
