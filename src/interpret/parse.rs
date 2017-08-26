@@ -137,8 +137,8 @@ fn parse_conditional(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, m
 fn parse_let(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut context: &mut Vec<String>, mut session_bindings: &mut HashMap<String, Term>) -> Result<Term, String> {
     let syntax_err = Err(String::from("Syntax error"));
 
-    match tokens.next() {
-        Some(Token::Identifier(s)) => {
+    match (tokens.next(), tokens.next()) {
+        (Some(Token::Identifier(s)), Some(Token::Keyword(Assign))) => {
             let name = s.clone();
             context.push(s.clone());
 

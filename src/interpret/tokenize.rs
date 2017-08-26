@@ -21,6 +21,7 @@ pub enum Token {
 #[derive(Clone)]
 pub enum Keyword {
     Arrow,
+    Assign,
     Let,
     In,
     If,
@@ -36,6 +37,7 @@ impl FromStr for Keyword {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "->"    => Ok(Keyword::Arrow),
+            "="     => Ok(Keyword::Assign),
             "let"   => Ok(Keyword::Let),
             "in"    => Ok(Keyword::In),
             "if"    => Ok(Keyword::If),
