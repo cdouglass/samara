@@ -118,6 +118,36 @@ fn test_factorial_with_let() {
 }
 
 #[test]
+fn test_polymorphic_let() {
+    assert_evaluates_to_atom("let id (\\x -> x) in (if id True then id 5 else id 10)", &mut HashMap::new(), Atom::Int(5));
+
+    assert_evaluates_to_atom(
+        "let
+            compose (\\f -> (\\g -> (\\x -> f (g x))))
+        in
+            if (compose (\\x -> (== (% x 2) 0)) (\\b -> if b then 1 else 0) False)
+            then (compose (\\x -> (- x 1)) (\\x -> (* x 3)) 5)
+            else 0",
+        &mut HashMap::new(), Atom::Int(14));
+}
+
+#[test]
+fn test_polymorphic_session_let() {
+    let mut bindings = HashMap::new();
+    let _ = evaluate("let id (\\x -> x)", &mut bindings);
+
+    assert_evaluates_to_atom("id 5", &mut bindings, Atom::Int(5));
+    assert_evaluates_to_atom("id False", &mut bindings, Atom::Bool(false));
+
+    // (b -> c) -> (a -> b) -> a -> c
+    let _ = evaluate("let compose (\\f -> (\\g -> (\\x -> f (g x))))", &mut bindings);
+    // (Int -> Int) -> (Int -> Int) -> Int -> Int
+    assert_evaluates_to_atom("compose (\\x -> (- x 1)) (\\x -> (* x 3)) 5", &mut bindings, Atom::Int(14));
+    // (Int -> Bool) -> (Bool -> Int) -> Bool -> Bool
+    assert_evaluates_to_atom("compose (\\x -> (== (% x 2) 0)) (\\b -> if b then 1 else 0) True", &mut bindings, Atom::Bool(false));
+}
+
+#[test]
 fn test_fully_apply_op() {
     assert_evaluates_to_atom("(// 12 3)", &mut HashMap::new(), Atom::Int(4));
 }
@@ -142,6 +172,6 @@ fn test_save_session_bindings() {
 #[test]
 fn test_recursive_session_bindings() {
     let mut bindings = HashMap::new();
-    let fact = evaluate("let fact (\\n -> if (< n 2) then 1 else (* n (fact (- n 1))))", &mut bindings);
+    let _ = evaluate("let fact (\\n -> if (< n 2) then 1 else (* n (fact (- n 1))))", &mut bindings);
     assert_evaluates_to_atom("fact 8", &mut bindings, Atom::Int(40320));
 }
