@@ -72,6 +72,10 @@ impl<'a> Iterator for Lexer<'a> {
             }
         }
 
+        fn is_identifier(c: char) -> bool {
+            c.is_alphabetic() || c == '_'
+        }
+
         loop {
             // map to prevent borrow of self.it
             // https://stackoverflow.com/questions/26920789/unable-to-borrow-an-iterator-as-mutable-more-than-once-at-a-time
@@ -81,7 +85,7 @@ impl<'a> Iterator for Lexer<'a> {
                     return token;
                 },
                 Some(Token::Identifier(s)) => {
-                    if update_if_match(s, ch, &Token::Identifier, &(|x| x.is_alphabetic()), &mut token) {
+                    if update_if_match(s, ch, &Token::Identifier, &is_identifier, &mut token) {
                         self.it.next();
                     } else { break; }
                 },
