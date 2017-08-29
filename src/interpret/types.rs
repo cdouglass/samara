@@ -44,7 +44,8 @@ pub enum Term {
 pub enum Type {
     Bool,
     Int,
-    Arrow(Box<Type>, Box<Type>)
+    Arrow(Box<Type>, Box<Type>),
+    TypeVar(usize)
 }
 
 impl Debug for Op {
@@ -93,7 +94,8 @@ impl Debug for Type {
         match *self {
             Type::Bool => write!(f, "Bool"),
             Type::Int => write!(f, "Int"),
-            Type::Arrow(ref a, ref b) => write!(f, "{:?} -> {:?}", *a, *b)
+            Type::Arrow(ref a, ref b) => write!(f, "{:?} -> {:?}", *a, *b),
+            Type::TypeVar(n) => write!(f, "t{:?}", n)
         }
     }
 }
