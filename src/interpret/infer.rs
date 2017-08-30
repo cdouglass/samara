@@ -51,7 +51,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<Type>, mut gen: &mut GenTy
             (b, constraints)
         },
         Term::Lambda(ref body, _) => {
-            context.push(gen.next().unwrap()); // argument
+            context.push(gen.next().unwrap());
             let (body_type, body_constraints) = get_constraints(body, &mut context, gen);
             (arrow(context.pop().unwrap(), body_type), body_constraints)
         },
@@ -59,8 +59,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<Type>, mut gen: &mut GenTy
             let mut stack = context.iter().rev();
             (stack.nth(*n).unwrap().clone(), vec![])
         },
-        //TODO
-        _ => panic!()
+        Term::Conditional(_, _, _) | Term::Let(_, _, _) | Term::SessionVar(_) => panic!()
     }
 }
 
@@ -157,6 +156,41 @@ fn base_type(atom: &Atom) -> Type {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use self::Op::*;
+
+    const FIVE : Term = Term::Atom(Atom::Int(5));
+
+    fn apply(func: Term, arg: Term) -> Term {
+        Term::App(Box::new(func.clone()), Box::new(arg.clone()))
+    }
+
+    fn assert_type(expr: &Term, t: &Type) {
+        match infer_type(expr) {
+            Ok(t1) => assert_eq!(t1, *t),
+            _ => panic!()
+        }
+    }
+
+    fn assert_type_err(expr: &Term, s: &str) {
+        match infer_type(expr) {
+            Err(msg) => assert_eq!(&msg, s),
+            _ => panic!()
+        }
+    }
+
+    fn int_to_term(n: i64) -> Term {
+        Term::Atom(Atom::Int(n))
+    }
+
+    fn bool_to_term(b: bool) -> Term {
+        Term::Atom(Atom::Bool(b))
+    }
+
+    fn op_to_term(op: Op) -> Term {
+        Term::Atom(Atom::BuiltIn(op))
+    }
+
+    /* Test misc helper functions */
 
     #[test]
     fn test_compose_substitutions() {
@@ -166,19 +200,56 @@ mod tests {
         assert_eq!(sub1.get(&2), Some(&Int));
     }
 
+    /* Test type inference */
+
     #[test]
-    fn test_apply_identity() {
-        let id = Term::Lambda(Box::new(Term::Var(0, String::from("x"))), String::from("x"));
-        let x = Term::App(Box::new(id), Box::new(Term::Atom(Atom::Int(5))));
-        assert_eq!(infer_type(&x), Ok(Int));
+    fn test_infer_base_types() {
+        for &(ref term, ref typ) in [(int_to_term(5), Int), (bool_to_term(false), Bool), (op_to_term(Add), arrow(Int, arrow(Int, Int))), (op_to_term(Eql), arrow(Int, arrow(Int, Bool)))].iter() {
+            assert_type(term, typ);
+        }
     }
 
     #[test]
-    fn test_type_error() {
+    fn test_application_of_builtins() {
+        use self::Op::*;
+        let eql_5 = apply(op_to_term(Eql), FIVE);
+        assert_type(&eql_5, &arrow(Int, Bool));
+        let eql_5_4 = apply(eql_5, int_to_term(4));
+        assert_type(&eql_5_4, &Bool);
+        let add_5 = apply(op_to_term(Add), FIVE);
+        assert_type(&add_5, &arrow(Int, Int));
+        let add_5_4 = apply(add_5, int_to_term(4));
+        assert_type(&add_5_4, &Int);
+    }
+
+    #[test]
+    fn test_identity() {
+        let id = Term::Lambda(Box::new(Term::Var(0, String::from("x"))), String::from("x"));
+        assert_type(&id, &arrow(TypeVar(1), TypeVar(1)));
+        let x = apply(id.clone(), FIVE);
+        assert_type(&x, &Int);
+        let x = apply(id.clone(), bool_to_term(true));
+        assert_type(&x, &Bool);
+    }
+
+    #[test]
+    fn test_type_mismatch() {
         let eql = Term::Atom(Atom::BuiltIn(Op::Eql));
         let tru = Term::Atom(Atom::Bool(true));
-        let x = Term::App(Box::new(eql), Box::new(tru));
-        let msg = String::from("Type error: Bool != Int");
-        assert_eq!(infer_type(&x), Err(msg));
+        let x = apply(eql, tru);
+        assert_type_err(&x, "Type error: Bool != Int");
+    }
+
+    #[test]
+    fn test_application_of_non_function() {
+        let x = apply(FIVE, FIVE);
+        assert_type_err(&x, "Type error: Int -> t2 != Int");
+    }
+
+    #[test]
+    fn test_no_recursive_function_types() {
+        let x = Term::Var(0, String::from("x"));
+        let untypable = Term::Lambda(Box::new(apply(x.clone(), x.clone())), String::from("x"));
+        assert_type_err(&untypable, "Type error: t1 -> t3 != t1");
     }
 }
