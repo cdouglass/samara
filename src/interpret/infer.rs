@@ -71,7 +71,19 @@ fn get_constraints(term: &Term, mut context: &mut Vec<Type>, mut gen: &mut GenTy
 
             (true_type, constraints)
         },
-        Term::Let(_, _, _) | Term::SessionVar(_) => panic!()
+        Term::Let(_, ref value, ref body) => {
+            let (value_type, value_constraints) = get_constraints(value, &mut context, gen);
+            context.push(gen.next().unwrap());
+            let (body_type, body_constraints) = get_constraints(body, &mut context, gen);
+
+            let mut constraints = value_constraints;
+            constraints.extend(body_constraints);
+            constraints.push((context.pop().unwrap(), value_type));
+            (body_type, constraints)
+        },
+        Term::SessionVar(_) => {
+            panic!()
+        }
     }
 }
 
@@ -179,7 +191,10 @@ mod tests {
     fn assert_type(expr: &Term, t: &Type) {
         match infer_type(expr) {
             Ok(t1) => assert_eq!(t1, *t),
-            _ => panic!()
+            Err(msg) => {
+                println!("Expected type {:?} but got error {:?}", t, msg);
+                panic!()
+            }
         }
     }
 
@@ -281,5 +296,21 @@ mod tests {
     fn test_conditional_with_mismatched_arms() {
         let cond = Term::Conditional(Box::new(bool_to_term(false)), Box::new(FIVE), Box::new(bool_to_term(true)));
         assert_type_err(&cond, "Type error: Int != Bool");
+    }
+
+    #[test]
+    fn test_polymorphic_let() {
+        let id = Term::Lambda(Box::new(Term::Var(0, String::from("x"))), String::from("x"));
+        let v = Term::Var(0, String::from("id"));
+        let poly = apply(apply(v.clone(), op_to_term(Gt)), apply(v.clone(), FIVE));
+        let term = Term::Let(String::from("id"), Box::new(id), Box::new(poly));
+        assert_type(&term, &arrow(Int, Bool));
+    }
+
+    #[test]
+    fn test_ill_typed_let_value_not_used_in_body() {
+        let invalid = apply(op_to_term(Add), bool_to_term(false));
+        let term = Term::Let(String::from("invalid"), Box::new(invalid), Box::new(FIVE));
+        assert_type_err(&term, "Type error: Bool != Int");
     }
 }
