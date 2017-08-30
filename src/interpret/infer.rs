@@ -59,7 +59,19 @@ fn get_constraints(term: &Term, mut context: &mut Vec<Type>, mut gen: &mut GenTy
             let mut stack = context.iter().rev();
             (stack.nth(*n).unwrap().clone(), vec![])
         },
-        Term::Conditional(_, _, _) | Term::Let(_, _, _) | Term::SessionVar(_) => panic!()
+        Term::Conditional(ref pred, ref true_case, ref false_case) => {
+            let (pred_type, pred_constraints) = get_constraints(pred, &mut context, gen);
+            let (true_type, true_constraints) = get_constraints(true_case, &mut context, gen);
+            let (false_type, false_constraints) = get_constraints(false_case, &mut context, gen);
+            let mut constraints = pred_constraints;
+            constraints.extend(true_constraints);
+            constraints.extend(false_constraints);
+            constraints.push((pred_type, Bool));
+            constraints.push((true_type.clone(), false_type));
+
+            (true_type, constraints)
+        },
+        Term::Let(_, _, _) | Term::SessionVar(_) => panic!()
     }
 }
 
@@ -251,5 +263,23 @@ mod tests {
         let x = Term::Var(0, String::from("x"));
         let untypable = Term::Lambda(Box::new(apply(x.clone(), x.clone())), String::from("x"));
         assert_type_err(&untypable, "Type error: t1 -> t3 != t1");
+    }
+
+    #[test]
+    fn test_valid_conditional() {
+        let cond = Term::Conditional(Box::new(bool_to_term(true)), Box::new(FIVE), Box::new(int_to_term(4)));
+        assert_type(&cond, &Int);
+    }
+
+    #[test]
+    fn test_conditional_with_invalid_predicate() {
+        let cond = Term::Conditional(Box::new(int_to_term(5)), Box::new(FIVE), Box::new(int_to_term(4)));
+        assert_type_err(&cond, "Type error: Int != Bool");
+    }
+
+    #[test]
+    fn test_conditional_with_mismatched_arms() {
+        let cond = Term::Conditional(Box::new(bool_to_term(false)), Box::new(FIVE), Box::new(bool_to_term(true)));
+        assert_type_err(&cond, "Type error: Int != Bool");
     }
 }
