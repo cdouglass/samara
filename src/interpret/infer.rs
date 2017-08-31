@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::iter::Iterator;
 
 use interpret::types::Atom;
@@ -33,9 +34,15 @@ fn apply_substitution(substitution: &HashMap<usize, Type>, schema: Type) -> Type
     }
 }
 
-// (type schema, vector of constraints )
-// constraint: left type in pair is to be made equal to right by applying appropriate substitution
-fn get_constraints(term: &Term, mut context: &mut Vec<Type>, mut gen: &mut GenTypeVar) -> (Type, Vec<(Type, Type)>) {
+fn instantiate(typ: Type, universals: HashSet<usize>, mut gen: &mut GenTypeVar) -> Type {
+    let mut sub = HashMap::new();
+    for k in universals {
+        sub.insert(k, gen.next().unwrap());
+    }
+    apply_substitution(&sub, typ)
+}
+
+fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar) -> (Type, Vec<(Type, Type)>) {
     match *term {
         Term::Atom(ref atom) => (base_type(atom), vec![]),
         Term::App(ref left, ref right) => {
@@ -51,13 +58,15 @@ fn get_constraints(term: &Term, mut context: &mut Vec<Type>, mut gen: &mut GenTy
             (b, constraints)
         },
         Term::Lambda(ref body, _) => {
-            context.push(gen.next().unwrap());
+            context.push((gen.next().unwrap(), HashSet::new()));
             let (body_type, body_constraints) = get_constraints(body, &mut context, gen);
-            (arrow(context.pop().unwrap(), body_type), body_constraints)
+            (arrow(context.pop().unwrap().0, body_type), body_constraints)
         },
         Term::Var(ref n, _) => {
             let mut stack = context.iter().rev();
-            (stack.nth(*n).unwrap().clone(), vec![])
+            let &(ref typ, ref universals) = stack.nth(*n).unwrap();
+            let fresh_typ = instantiate(typ.clone(), universals.clone(), gen);
+            (fresh_typ, vec![])
         },
         Term::Conditional(ref pred, ref true_case, ref false_case) => {
             let (pred_type, pred_constraints) = get_constraints(pred, &mut context, gen);
@@ -73,13 +82,24 @@ fn get_constraints(term: &Term, mut context: &mut Vec<Type>, mut gen: &mut GenTy
         },
         Term::Let(_, ref value, ref body) => {
             let (value_type, value_constraints) = get_constraints(value, &mut context, gen);
-            context.push(gen.next().unwrap());
-            let (body_type, body_constraints) = get_constraints(body, &mut context, gen);
+            if let Ok(value_sub) = unify(&mut value_constraints.clone()) {
+                let principal_value_type = apply_substitution(&value_sub, value_type);
+                let universals = type_vars_free_in(&principal_value_type);
 
-            let mut constraints = value_constraints;
-            constraints.extend(body_constraints);
-            constraints.push((context.pop().unwrap(), value_type));
-            (body_type, constraints)
+                context.push((principal_value_type, universals));
+                get_constraints(body, &mut context, gen)
+            } else {
+                // else we have an unsatisfiable constraint but we're not equipped to return an error
+                // so for now, we return the bad constraints and let unify be called a second time to
+                // get the actual error
+                context.push((gen.next().unwrap(), HashSet::new()));
+                let (body_type, body_constraints) = get_constraints(body, &mut context, gen);
+
+                let mut constraints = value_constraints;
+                constraints.extend(body_constraints);
+                constraints.push((context.pop().unwrap().0, value_type));
+                (body_type, constraints)
+            }
         },
         Term::SessionVar(_) => {
             panic!()
@@ -162,6 +182,21 @@ impl Iterator for GenTypeVar {
     }
 }
 
+fn type_vars_free_in(typ: &Type) -> HashSet<usize> {
+    let mut tvars = HashSet::new();
+    match typ.clone() {
+        TypeVar(n) => {
+            tvars.insert(n);
+        },
+        Arrow(ref t1, ref t2) => {
+            tvars.extend(type_vars_free_in(t1));
+            tvars.extend(type_vars_free_in(t2));
+        },
+        _ => { }
+    }
+    tvars
+}
+
 fn arrow(t1: Type, t2: Type) -> Type {
     Arrow(Box::new(t1), Box::new(t2))
 }
@@ -201,7 +236,10 @@ mod tests {
     fn assert_type_err(expr: &Term, s: &str) {
         match infer_type(expr) {
             Err(msg) => assert_eq!(&msg, s),
-            _ => panic!()
+            Ok(t) => {
+                println!("Expected type error {:?} but got type {:?}", s, t);
+                panic!()
+            }
         }
     }
 
