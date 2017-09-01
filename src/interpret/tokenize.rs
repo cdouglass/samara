@@ -1,7 +1,6 @@
 use std::iter::Iterator;
 use std::iter::Peekable;
 use std::str::Chars;
-use std::str::FromStr;
 
 #[derive(PartialEq)]
 #[derive(Debug)]
@@ -29,25 +28,6 @@ pub enum Keyword {
     Else,
     True,
     False
-}
-
-impl FromStr for Keyword {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "->"    => Ok(Keyword::Arrow),
-            "="     => Ok(Keyword::Assign),
-            "let"   => Ok(Keyword::Let),
-            "in"    => Ok(Keyword::In),
-            "if"    => Ok(Keyword::If),
-            "then"  => Ok(Keyword::Then),
-            "else"  => Ok(Keyword::Else),
-            "True"  => Ok(Keyword::True),
-            "False" => Ok(Keyword::False),
-            _       => Err(())
-        }
-    }
 }
 
 pub struct Lexer<'a> {
@@ -80,23 +60,20 @@ impl<'a> Iterator for Lexer<'a> {
             // map to prevent borrow of self.it
             // https://stackoverflow.com/questions/26920789/unable-to-borrow-an-iterator-as-mutable-more-than-once-at-a-time
             let ch = self.it.peek().cloned();
-            match token.clone() {
+            match token {
                 Some(Token::Open) | Some(Token::Close) | Some(Token::Lambda) | Some(Token::Keyword(_)) => {
                     return token;
                 },
-                Some(Token::Identifier(s)) => {
-                    if update_if_match(s, ch, &Token::Identifier, &is_identifier, &mut token) {
-                        self.it.next();
+                Some(Token::Identifier(ref mut s)) => {
+                    if update_if_match(s, ch, &is_identifier, &mut self.it) {
                     } else { break; }
                 },
-                Some(Token::Number(s)) => {
-                    if update_if_match(s, ch, &Token::Number, &(|x| x.is_numeric()), &mut token) {
-                        self.it.next();
+                Some(Token::Number(ref mut s)) => {
+                    if update_if_match(s, ch, &(|x| x.is_numeric()), &mut self.it) {
                     } else { break; }
                 },
-                Some(Token::Operator(s)) => {
-                    if update_if_match(s, ch, &Token::Operator, &is_operator, &mut token) {
-                        self.it.next();
+                Some(Token::Operator(ref mut s)) => {
+                    if update_if_match(s, ch, &is_operator, &mut self.it) {
                     } else { break; }
                 },
                 None => {
@@ -119,22 +96,36 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
         }
-        match token.clone() {
+        match token {
             Some(Token::Identifier(ref s)) | Some(Token::Operator(ref s)) => {
-                match Keyword::from_str(s) {
-                    Ok(k) => Some(Token::Keyword(k)),
-                    _ => token
+                use self::Keyword::*;
+                use self::Token::*;
+                match s.as_ref() {
+                    "->"    => { return Some(Keyword(Arrow)); },
+                    "="     => { return Some(Keyword(Assign)); },
+                    "let"   => { return Some(Keyword(Let)); },
+                    "in"    => { return Some(Keyword(In)); },
+                    "if"    => { return Some(Keyword(If)); },
+                    "then"  => { return Some(Keyword(Then)); },
+                    "else"  => { return Some(Keyword(Else)); },
+                    "True"  => { return Some(Keyword(True)); },
+                    "False" => { return Some(Keyword(False)); },
+                    _       => { }
                 }
-            }
-            _ => token
+            },
+            _ => { }
         }
+        token
     }
 }
 
-fn update_if_match(s: String, ch: Option<char>, constructor: &Fn(String) -> Token, predicate: &Fn(char) -> bool, token: &mut Option<Token>) -> bool {
+fn update_if_match(s: &mut String, ch: Option<char>, predicate: &Fn(char) -> bool, it: &mut Peekable<Chars>) -> bool {
     ch.map(|c| {
         let p = predicate(c);
-        if p { *token = Some(constructor(s + &c.to_string())); }
+        if p {
+            s.push(c);
+            it.next();
+        }
         p
     }).unwrap_or(false)
 }

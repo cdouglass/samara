@@ -132,13 +132,13 @@ fn test_polymorphic_let() {
 #[test]
 fn test_polymorphic_session_let() {
     let mut bindings = vec![];
-    let _ = evaluate("let id = (\\x -> x)", &mut bindings);
+    evaluate("let id = (\\x -> x)", &mut bindings).unwrap();
 
     assert_evaluates_to_atom("id 5", &mut bindings, Atom::Int(5));
     assert_evaluates_to_atom("id False", &mut bindings, Atom::Bool(false));
 
     // (b -> c) -> (a -> b) -> a -> c
-    let _ = evaluate("let compose = (\\f -> (\\g -> (\\x -> f (g x))))", &mut bindings);
+    evaluate("let compose = (\\f -> (\\g -> (\\x -> f (g x))))", &mut bindings).unwrap();
     // (Int -> Int) -> (Int -> Int) -> Int -> Int
     assert_evaluates_to_atom("compose (\\x -> (- x 1)) (\\x -> (* x 3)) 5", &mut bindings, Atom::Int(14));
     // (Int -> Bool) -> (Bool -> Int) -> Bool -> Bool
@@ -170,6 +170,6 @@ fn test_save_session_bindings() {
 #[test]
 fn test_recursive_session_bindings() {
     let mut bindings = vec![];
-    let _ = evaluate("let fact = (\\n -> if (< n 2) then 1 else (* n (fact (- n 1))))", &mut bindings);
+    evaluate("let fact = (\\n -> if (< n 2) then 1 else (* n (fact (- n 1))))", &mut bindings).unwrap();
     assert_evaluates_to_atom("fact 8", &mut bindings, Atom::Int(40320));
 }

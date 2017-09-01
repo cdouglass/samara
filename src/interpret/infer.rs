@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::Iterator;
 
-use interpret::evaluate;
 use interpret::types::Atom;
 use interpret::types::Op;
 use interpret::types::Term;
@@ -19,13 +18,12 @@ fn infer_type_(term: &Term, bindings: &[(String, Option<Term>)], mut gen: &mut G
 
     //TODO this is silly - just meant to let me test context is used correctly for instantiation
     if let Some(&(_, Some(ref value))) = bindings.last() {
-        let (value_type, value_constraints) = get_constraints(&value, &mut context, &mut gen);
-        if let Ok(value_sub) = unify(&mut value_constraints.clone()) {
-            let principal_value_type = apply_substitution(&value_sub, value_type);
-            let universals = type_vars_free_in(&principal_value_type);
+        let (value_type, value_constraints) = get_constraints(value, &mut context, &mut gen);
+        let value_sub = unify(&mut value_constraints.clone())?;
+        let principal_value_type = apply_substitution(&value_sub, value_type);
+        let universals = type_vars_free_in(&principal_value_type);
 
-            context.push((principal_value_type, universals));
-        }
+        context.push((principal_value_type, universals));
     }
 
     let (schema, mut constraints) = get_constraints(term, &mut context, &mut gen);
@@ -51,12 +49,12 @@ fn apply_substitution(substitution: &HashMap<usize, Type>, schema: Type) -> Type
     }
 }
 
-fn instantiate(typ: Type, universals: HashSet<usize>, mut gen: &mut GenTypeVar) -> Type {
+fn instantiate(typ: &Type, universals: &HashSet<usize>, mut gen: &mut GenTypeVar) -> Type {
     let mut sub = HashMap::new();
-    for k in universals {
-        sub.insert(k, gen.next().unwrap());
+    for k in universals.iter() {
+        sub.insert(*k, gen.next().unwrap());
     }
-    apply_substitution(&sub, typ)
+    apply_substitution(&sub, typ.clone())
 }
 
 fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar) -> (Type, Vec<(Type, Type)>) {
@@ -80,9 +78,8 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             (arrow(context.pop().unwrap().0, body_type), body_constraints)
         },
         Term::Var(ref n, _) => {
-            let mut stack = context.iter().rev();
-            let &(ref typ, ref universals) = stack.nth(*n).unwrap();
-            let fresh_typ = instantiate(typ.clone(), universals.clone(), gen);
+            let (ref typ, ref universals) = context[context.len() - n - 1];
+            let fresh_typ = instantiate(typ, universals, gen);
             (fresh_typ, vec![])
         },
         Term::Conditional(ref pred, ref true_case, ref false_case) => {
@@ -198,7 +195,7 @@ impl Iterator for GenTypeVar {
 
 fn type_vars_free_in(typ: &Type) -> HashSet<usize> {
     let mut tvars = HashSet::new();
-    match typ.clone() {
+    match *typ {
         TypeVar(n) => {
             tvars.insert(n);
         },
@@ -229,12 +226,13 @@ fn base_type(atom: &Atom) -> Type {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use interpret::evaluate;
     use self::Op::*;
 
     const FIVE : Term = Term::Atom(Atom::Int(5));
 
     fn apply(func: Term, arg: Term) -> Term {
-        Term::App(Box::new(func.clone()), Box::new(arg.clone()))
+        Term::App(Box::new(func), Box::new(arg))
     }
 
     fn assert_type_with_context(expr: &Term, t: &Type, bindings: &[(String, Option<Term>)], gen: &mut GenTypeVar) {
@@ -343,7 +341,7 @@ mod tests {
     #[test]
     fn test_no_recursive_function_types() {
         let x = Term::Var(0, String::from("x"));
-        let untypable = Term::Lambda(Box::new(apply(x.clone(), x.clone())), String::from("x"));
+        let untypable = Term::Lambda(Box::new(apply(x.clone(), x)), String::from("x"));
         assert_type_err(&untypable, "Type error: t1 -> t3 != t1");
     }
 
@@ -369,7 +367,7 @@ mod tests {
     fn test_polymorphic_let() {
         let id = Term::Lambda(Box::new(Term::Var(0, String::from("x"))), String::from("x"));
         let v = Term::Var(0, String::from("id"));
-        let poly = apply(apply(v.clone(), op_to_term(Gt)), apply(v.clone(), FIVE));
+        let poly = apply(apply(v.clone(), op_to_term(Gt)), apply(v, FIVE));
         let term = Term::Let(String::from("id"), Box::new(id), Box::new(poly));
         assert_type(&term, &arrow(Int, Bool));
     }
@@ -385,7 +383,7 @@ mod tests {
     fn test_fresh_instantiation() {
         let mut bindings = vec![];
         let mut gen = GenTypeVar{n: 0};
-        let _ = evaluate("let id = (\\x -> x)", &mut bindings);
+        evaluate("let id = (\\x -> x)", &mut bindings).unwrap();
         let x = Term::Var(0, String::new());
         assert_type_with_context(&x, &arrow(TypeVar(2), TypeVar(2)), &bindings, &mut gen);
         assert_type_with_context(&x, &arrow(TypeVar(4), TypeVar(4)), &bindings, &mut gen);

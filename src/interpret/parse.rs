@@ -30,13 +30,13 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut cont
                 parse_term(tokens, &mut stack, &mut context)
             },
             Some(Token::Close) => {
-                match stack.last().cloned() {
-                    Some(Token::Open) => {
+                match stack.last() {
+                    Some(&Token::Open) => {
                         stack.pop();
                         tokens.next();
                         break;
                     },
-                    Some(Token::Keyword(Arrow)) => { break; },
+                    Some(&Token::Keyword(Arrow)) => { break; },
                     _ => { return close_err; }
                 }
             },
@@ -54,7 +54,7 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut cont
                             _ => { return lambda_syntax_err; }
                         }
                     },
-                    _ => lambda_syntax_err.clone()
+                    _ => { return lambda_syntax_err; }
                 }
             },
             Some(Token::Keyword(k)) => {
@@ -72,11 +72,11 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut cont
                     },
                 }
             },
-            Some(Token::Identifier(ref s)) => {
+            Some(Token::Identifier(s)) => {
                 tokens.next();
                 let mut stack = context.iter().rev();
-                match stack.position(|x| &x.0 == s) {
-                    Some(k) => Ok(Term::Var(k, s.clone())),
+                match stack.position(|x| x.0 == s) {
+                    Some(k) => Ok(Term::Var(k, s)),
                     None => Err(String::from(format!("Error: Undefined variable {}", s)))
                 }
             },
