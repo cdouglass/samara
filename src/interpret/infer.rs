@@ -2,15 +2,32 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::Iterator;
 
+use interpret::evaluate;
 use interpret::types::Atom;
 use interpret::types::Op;
 use interpret::types::Term;
 use interpret::types::Type;
 use interpret::types::Type::*;
 
-pub fn infer_type(term: &Term) -> Result<Type, String> {
+pub fn infer_type(term: &Term, bindings: &[(String, Option<Term>)]) -> Result<Type, String> {
     let mut gen = GenTypeVar{n: 0};
+    infer_type_(term, bindings, &mut gen)
+}
+
+fn infer_type_(term: &Term, bindings: &[(String, Option<Term>)], mut gen: &mut GenTypeVar) -> Result<Type, String> {
     let mut context = vec![];
+
+    //TODO this is silly - just meant to let me test context is used correctly for instantiation
+    if let Some(&(_, Some(ref value))) = bindings.last() {
+        let (value_type, value_constraints) = get_constraints(&value, &mut context, &mut gen);
+        if let Ok(value_sub) = unify(&mut value_constraints.clone()) {
+            let principal_value_type = apply_substitution(&value_sub, value_type);
+            let universals = type_vars_free_in(&principal_value_type);
+
+            context.push((principal_value_type, universals));
+        }
+    }
+
     let (schema, mut constraints) = get_constraints(term, &mut context, &mut gen);
     match unify(&mut constraints) {
         Ok(substitution) => Ok(apply_substitution(&substitution, schema)),
@@ -220,8 +237,20 @@ mod tests {
         Term::App(Box::new(func.clone()), Box::new(arg.clone()))
     }
 
+    fn assert_type_with_context(expr: &Term, t: &Type, bindings: &[(String, Option<Term>)], gen: &mut GenTypeVar) {
+        match infer_type_(expr, bindings, gen) {
+            Ok(t1) => assert_eq!(t1, *t),
+            Err(msg) => {
+                println!("Expected type {:?} but got error {:?}", t, msg);
+                panic!()
+            }
+        }
+    }
+
     fn assert_type(expr: &Term, t: &Type) {
-        match infer_type(expr) {
+        let bindings = vec![];
+        let mut gen = GenTypeVar{n: 0};
+        match infer_type_(expr, &bindings, &mut gen) {
             Ok(t1) => assert_eq!(t1, *t),
             Err(msg) => {
                 println!("Expected type {:?} but got error {:?}", t, msg);
@@ -231,7 +260,9 @@ mod tests {
     }
 
     fn assert_type_err(expr: &Term, s: &str) {
-        match infer_type(expr) {
+        let bindings = vec![];
+        let mut gen = GenTypeVar{n: 0};
+        match infer_type_(expr, &bindings, &mut gen) {
             Err(msg) => assert_eq!(&msg, s),
             Ok(t) => {
                 println!("Expected type error {:?} but got type {:?}", s, t);
@@ -239,6 +270,7 @@ mod tests {
             }
         }
     }
+
 
     fn int_to_term(n: i64) -> Term {
         Term::Atom(Atom::Int(n))
@@ -347,5 +379,16 @@ mod tests {
         let invalid = apply(op_to_term(Add), bool_to_term(false));
         let term = Term::Let(String::from("invalid"), Box::new(invalid), Box::new(FIVE));
         assert_type_err(&term, "Type error: Bool != Int");
+    }
+
+    #[test]
+    fn test_fresh_instantiation() {
+        let mut bindings = vec![];
+        let mut gen = GenTypeVar{n: 0};
+        let _ = evaluate("let id = (\\x -> x)", &mut bindings);
+        let x = Term::Var(0, String::new());
+        assert_type_with_context(&x, &arrow(TypeVar(2), TypeVar(2)), &bindings, &mut gen);
+        assert_type_with_context(&x, &arrow(TypeVar(4), TypeVar(4)), &bindings, &mut gen);
+        assert_type_with_context(&x, &arrow(TypeVar(6), TypeVar(6)), &bindings, &mut gen);
     }
 }

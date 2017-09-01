@@ -49,7 +49,7 @@ fn main() {
             Some(Command::Exit) => break,
             Some(Command::Help) => println!("{}", USAGE),
             Some(Command::TypeOf(s)) => {
-                let result = interpret::type_of(&s);
+                let result = interpret::type_of(&s, &bindings);
                 match result {
                     (Ok(term), Ok(typ)) => println!("{:?} : {:?}", term, typ),
                     (Err(msg), _) | (_, Err(msg)) => println!("{}", msg)
