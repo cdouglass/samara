@@ -66,7 +66,10 @@ fn reduce(ast: Term, session_bindings: &[(String, Option<Term>)]) -> Result<Term
         Let(name, value, body) => {
             // for now, same as lambda application except with sugar for self-reference
             // BUT will have to change once types are enforced
-            reduce(unshift_indices(sub_at_index(*body, fix(name, *value), 0), 1), session_bindings)
+            match reduce(fix(name, *value), session_bindings) {
+                Ok(val) => reduce(unshift_indices(sub_at_index(*body, val, 0), 1), session_bindings),
+                Err(msg) => Err(msg)
+            }
         },
         Var(n, s) => {
             let mut bindings_as_stack = session_bindings.iter().rev();
