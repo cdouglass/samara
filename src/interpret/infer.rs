@@ -100,9 +100,6 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
                 constraints.push((context.pop().unwrap().0, value_type));
                 (body_type, constraints)
             }
-        },
-        Term::SessionVar(_) => {
-            panic!()
         }
     }
 }

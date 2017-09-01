@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::iter::Iterator;
 use std::iter::Peekable;
 use std::str::FromStr;
@@ -11,13 +10,12 @@ use interpret::types::Atom;
 use interpret::types::Op;
 use interpret::types::Term;
 
-pub fn parse(mut tokens: &mut Peekable<Lexer>, mut session_bindings: &mut HashMap<String, Term>) -> Result<Term, String> {
+pub fn parse(mut tokens: &mut Peekable<Lexer>, mut context: &mut Vec<(String, Option<Term>)>) -> Result<Term, String> {
     let mut stack = vec![];
-    let mut context = vec![];
-    parse_term(&mut tokens, &mut stack, &mut context, &mut session_bindings)
+    parse_term(&mut tokens, &mut stack, &mut context)
 }
 
-fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut context: &mut Vec<String>, mut session_bindings: &mut HashMap<String, Term>) -> Result<Term, String> {
+fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut context: &mut Vec<(String, Option<Term>)>) -> Result<Term, String> {
     let close_err = Err(String::from("Unexpected CLOSE delimiter"));
     let end_of_input_err = Err(String::from("Unexpected end of input"));
     let syntax_err = Err(String::from("Syntax error"));
@@ -29,7 +27,7 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut cont
             Some(Token::Open) => {
                 tokens.next();
                 stack.push(Token::Open);
-                parse_term(tokens, &mut stack, &mut context, &mut session_bindings)
+                parse_term(tokens, &mut stack, &mut context)
             },
             Some(Token::Close) => {
                 match stack.last().cloned() {
@@ -46,9 +44,9 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut cont
                 tokens.next();
                 match (tokens.next(), tokens.next()) {
                     (Some(Token::Identifier(s)), Some(Token::Keyword(Arrow))) => {
-                        context.push(s.clone());
+                        context.push((s.clone(), None));
                         stack.push(Token::Keyword(Arrow));
-                        let body = parse_term(tokens, &mut stack, &mut context, &mut session_bindings);
+                        let body = parse_term(tokens, &mut stack, &mut context);
                         context.pop();
                         let result = body.map(|b| Term::Lambda(Box::new(b), s));
                         match stack.pop() {
@@ -63,10 +61,10 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut cont
                 tokens.next();
                 match k {
                     Arrow => { return lambda_syntax_err; },
-                    If    => parse_conditional(tokens, &mut stack, &mut context, &mut session_bindings),
+                    If    => parse_conditional(tokens, &mut stack, &mut context),
                     True  => { Ok(Term::Atom(Atom::Bool(true))) },
                     False => { Ok(Term::Atom(Atom::Bool(false))) },
-                    Let   => parse_let(tokens, &mut stack, &mut context, &mut session_bindings),
+                    Let   => parse_let(tokens, &mut stack, &mut context),
                     k    => {
                         if stack.pop() == Some(Token::Keyword(k)) {
                             break;
@@ -77,14 +75,9 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut cont
             Some(Token::Identifier(ref s)) => {
                 tokens.next();
                 let mut stack = context.iter().rev();
-                match stack.position(|x| x == s) {
+                match stack.position(|x| &x.0 == s) {
                     Some(k) => Ok(Term::Var(k, s.clone())),
-                    None => {
-                        match session_bindings.get(s) {
-                            Some(_) => Ok(Term::SessionVar(s.clone())),
-                            None => Err(String::from(format!("Error: Undefined variable {}", s)))
-                        }
-                    }
+                    None => Err(String::from(format!("Error: Undefined variable {}", s)))
                 }
             },
             Some(Token::Number(s)) => {
@@ -119,44 +112,37 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut cont
     }
 }
 
-fn parse_conditional(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut context: &mut Vec<String>, mut session_bindings: &mut HashMap<String, Term>) -> Result<Term, String> {
+fn parse_conditional(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut context: &mut Vec<(String, Option<Term>)>) -> Result<Term, String> {
     stack.push(Token::Keyword(Then));
-    let predicate = parse_term(tokens, stack, context, &mut session_bindings);
+    let predicate = parse_term(tokens, stack, context);
 
     stack.push(Token::Keyword(Else));
-    let true_case = parse_term(tokens, stack, context, &mut session_bindings);
+    let true_case = parse_term(tokens, stack, context);
 
-    let false_case = parse_term(tokens, stack, context, &mut session_bindings);
+    let false_case = parse_term(tokens, stack, context);
     match (predicate, true_case, false_case) {
         (Ok(p), Ok(t), Ok(f)) => Ok(Term::Conditional(Box::new(p), Box::new(t), Box::new(f))),
         (Err(msg), _, _) | (_, Err(msg), _) | (_, _, Err(msg)) => Err(msg)
     }
 }
 
-fn parse_let(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut context: &mut Vec<String>, mut session_bindings: &mut HashMap<String, Term>) -> Result<Term, String> {
+fn parse_let(tokens: &mut Peekable<Lexer>, mut stack: &mut Vec<Token>, mut context: &mut Vec<(String, Option<Term>)>) -> Result<Term, String> {
     let syntax_err = Err(String::from("Syntax error"));
 
     match (tokens.next(), tokens.next()) {
         (Some(Token::Identifier(s)), Some(Token::Keyword(Assign))) => {
-            let name = s.clone();
-            context.push(s.clone());
+            context.push((s.clone(), None));
 
             stack.push(Token::Keyword(In));
-            let value = parse_term(tokens, &mut stack, &mut context, &mut session_bindings);
+            let value = parse_term(tokens, &mut stack, &mut context);
 
             if *stack == vec![Token::Keyword(In)] {
-                match value {
-                    Ok(v) => {
-                        session_bindings.insert(s, v.clone());
-                        Ok(v)
-                    },
-                    Err(msg) => Err(msg)
-                }
+                value
             } else {
-                let body = parse_term(tokens, &mut stack, &mut context, &mut session_bindings);
+                let body = parse_term(tokens, &mut stack, &mut context);
                 context.pop();
                 match (value, body) {
-                    (Ok(v), Ok(b)) => Ok(Term::Let(name, Box::new(v), Box::new(b))),
+                    (Ok(v), Ok(b)) => Ok(Term::Let(s, Box::new(v), Box::new(b))),
                     (Err(msg), _) | (_, Err(msg)) => Err(msg)
                 }
             }

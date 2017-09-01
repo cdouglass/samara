@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::io;
 use std::io::Write;
 use std::iter::Iterator;
@@ -36,7 +35,7 @@ fn get_command(input: &str) -> Option<Command> {
 
 fn main() {
     println!("{}", GREETING);
-    let mut bindings = HashMap::new();
+    let mut bindings = vec![];
 
     loop {
         print!("{}", PROMPT);

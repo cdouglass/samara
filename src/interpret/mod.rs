@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 mod tokenize;
 use self::tokenize::build_lexer;
 
@@ -21,7 +19,7 @@ mod tests;
 
 pub fn type_of(expr: &str) -> (Result<Term, String>, Result<Type, String>) {
     let mut tokens = build_lexer(expr.trim());
-    let mut session_bindings = HashMap::new();
+    let mut session_bindings = vec![];
     let ast = parse(&mut tokens, &mut session_bindings);
     match ast {
         Ok(term) =>{
@@ -32,23 +30,22 @@ pub fn type_of(expr: &str) -> (Result<Term, String>, Result<Type, String>) {
     }
 }
 
-pub fn evaluate(expr: &str, mut session_bindings: &mut HashMap<String, Term>) -> Result<Term, String> {
+pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<(String, Option<Term>)>) -> Result<Term, String> {
     let mut tokens = build_lexer(expr.trim());
-    match parse(&mut tokens, &mut session_bindings).and_then(|x| reduce(x, session_bindings)) {
-        Ok(SessionVar(name)) => {
-            match reduce(SessionVar(name.clone()), session_bindings) {
-                Ok(value) => {
-                    session_bindings.insert(name, value.clone());
-                    Ok(value)
-                },
-                Err(msg) => Err(msg)
-            }
-        },
-        x => x
+    let term = parse(&mut tokens, &mut session_bindings).and_then(|x| reduce(x, session_bindings));
+
+    // last element will only lack a term if the current expression was a Let without an In
+    // in which case parse will have just pushed the tuple onto session_bindings
+    let last = session_bindings.last().cloned();
+    if let (&Ok(ref t), Some((ref s, None))) = (&term, last) {
+        session_bindings.pop();
+        session_bindings.push((s.clone(), Some(t.clone())))
     }
+
+    term
 }
 
-fn reduce(ast: Term, session_bindings: &HashMap<String, Term>) -> Result<Term, String> {
+fn reduce(ast: Term, session_bindings: &[(String, Option<Term>)]) -> Result<Term, String> {
     match ast {
         App(func, arg) => {
             let f = reduce(*func, session_bindings);
@@ -57,15 +54,6 @@ fn reduce(ast: Term, session_bindings: &HashMap<String, Term>) -> Result<Term, S
                 (Ok(f), Ok(a)) => apply(f, a, session_bindings),
                 _ => Err(String::from("Type error"))
             }
-        },
-        Atom(a) => {
-            Ok(Atom(a))
-        },
-        Lambda(body, s) => {
-            Ok(Lambda(Box::new(*body), s))
-        },
-        Var(n, s) => {
-            Ok(Var(n, s))
         },
         Conditional(pred, true_case, false_case) => {
             match reduce(*pred, session_bindings) {
@@ -80,16 +68,19 @@ fn reduce(ast: Term, session_bindings: &HashMap<String, Term>) -> Result<Term, S
             // BUT will have to change once types are enforced
             reduce(unshift_indices(sub_at_index(*body, fix(name, *value), 0), 1), session_bindings)
         },
-        SessionVar(name) => {
-            match session_bindings.get(&name) {
-                Some(term) => reduce(fix(name.clone(), term.clone()), session_bindings),
-                None => Err(String::from("Undefined variable"))
+        Var(n, s) => {
+            let mut bindings_as_stack = session_bindings.iter().rev();
+            // if not defined, would already have blown up in parse
+            match *bindings_as_stack.nth(n).unwrap() {
+                (_, None) => Ok(Var(n, s)),
+                (_, Some(ref term)) => Ok(term.clone())
             }
-        }
+        },
+        term => Ok(term)
     }
 }
 
-fn apply(func: Term, arg: Term, session_bindings: &HashMap<String, Term>) -> Result<Term, String> {
+fn apply(func: Term, arg: Term, session_bindings: &[(String, Option<Term>)]) -> Result<Term, String> {
     let type_err = String::from("Type error");
     match func {
         Atom(a) => {
@@ -119,7 +110,7 @@ fn apply(func: Term, arg: Term, session_bindings: &HashMap<String, Term>) -> Res
             reduce(unshift_indices(sub_at_index(*body, arg, 0), 1), session_bindings)
         },
         // func is already reduced, so should not be in any of these forms
-        Conditional(_, _, _) | Var(_, _) | Let(_, _, _) | SessionVar(_) => {
+        Conditional(_, _, _) | Var(_, _) | Let(_, _, _) => {
             Err(type_err)
         }
     }
@@ -154,8 +145,7 @@ fn sub_at_index(body: Term, t: Term, index: usize) -> Term {
             let subbed_value = sub_at_index(*value, t.clone(), index + 1);
             let subbed_let_body = sub_at_index(*let_body, t.clone(), index + 1);
             Let(name, Box::new(subbed_value), Box::new(subbed_let_body))
-        },
-        SessionVar(name) => SessionVar(name)
+        }
     }
 }
 
@@ -184,9 +174,6 @@ fn shift_indices(term: Term, distance: usize, cutoff: usize) -> Term {
             let shifted_value = shift_indices(*value, distance, cutoff + 1);
             let shifted_body = shift_indices(*body, distance, cutoff + 1);
             Let(name, Box::new(shifted_value), Box::new(shifted_body))
-        },
-        SessionVar(name) => {
-            SessionVar(name)
         }
     }
 }
@@ -217,14 +204,13 @@ fn unshift_indices(term: Term, cutoff: usize) -> Term {
             let unshifted_value = unshift_indices(*value, cutoff + 1);
             let unshifted_body = unshift_indices(*body, cutoff + 1);
             Let(name, Box::new(unshifted_value), Box::new(unshifted_body))
-        },
-        SessionVar(name) => SessionVar(name)
+        }
     }
 }
 
 
 fn fix(name: String, value: Term) -> Term {
     let mut fix_toks = build_lexer("(\\f -> (\\x -> f (\\y -> x x y)) (\\x -> f (\\y -> x x y)))");
-    let y = parse(&mut fix_toks, &mut HashMap::new()).unwrap();
+    let y = parse(&mut fix_toks, &mut vec![]).unwrap();
     App(Box::new(y), Box::new(Lambda(Box::new(value), name)))
 }
