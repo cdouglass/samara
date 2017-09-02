@@ -18,43 +18,42 @@ fn infer_type_(term: &Term, bindings: &[(String, Option<Term>)], mut gen: &mut G
 
     //TODO this is silly - just meant to let me test context is used correctly for instantiation
     if let Some(&(_, Some(ref value))) = bindings.last() {
-        let (value_type, value_constraints) = get_constraints(value, &mut context, &mut gen);
-        let value_sub = unify(&mut value_constraints.clone())?;
-        let principal_value_type = apply_substitution(&value_sub, value_type);
-        let universals = type_vars_free_in(&principal_value_type);
+        let (mut value_type, value_constraints) = get_constraints(value, &mut context, &mut gen);
+        let value_sub = unify(value_constraints)?;
+        apply_substitution(&value_sub, &mut value_type);
+        let universals = type_vars_free_in(&value_type);
 
-        context.push((principal_value_type, universals));
+        context.push((value_type, universals));
     }
 
-    let (schema, mut constraints) = get_constraints(term, &mut context, &mut gen);
-    match unify(&mut constraints) {
-        Ok(substitution) => Ok(apply_substitution(&substitution, schema)),
-        Err(msg) => Err(msg)
-    }
+    let (mut typ, constraints) = get_constraints(term, &mut context, &mut gen);
+    let substitution = unify(constraints)?;
+    apply_substitution(&substitution, &mut typ);
+    Ok(typ)
 }
 
-fn apply_substitution(substitution: &HashMap<usize, Type>, schema: Type) -> Type {
-    match schema {
+fn apply_substitution(substitution: &HashMap<usize, Type>, typ: &mut Type) {
+    match *typ {
         TypeVar(n) => {
-            match substitution.get(&n) {
-                Some(t) => t.clone(),
-                None => TypeVar(n)
+            if let Some(t) = substitution.get(&n) {
+                    *typ = t.clone();
             }
         },
-        Arrow(left, right) => {
-            arrow(apply_substitution(substitution, *left),
-                  apply_substitution(substitution, *right))
+        Arrow(ref mut left, ref mut right) => {
+            apply_substitution(substitution, left);
+            apply_substitution(substitution, right);
         },
-        t => t
+        _ => { }
     }
 }
 
-fn instantiate(typ: &Type, universals: &HashSet<usize>, mut gen: &mut GenTypeVar) -> Type {
+fn instantiate(mut typ: Type, universals: &HashSet<usize>, mut gen: &mut GenTypeVar) -> Type {
     let mut sub = HashMap::new();
     for k in universals.iter() {
         sub.insert(*k, gen.next().unwrap());
     }
-    apply_substitution(&sub, typ.clone())
+    apply_substitution(&sub, &mut typ);
+    typ
 }
 
 fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar) -> (Type, Vec<(Type, Type)>) {
@@ -79,7 +78,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
         },
         Term::Var(ref n, _) => {
             let (ref typ, ref universals) = context[context.len() - n - 1];
-            let fresh_typ = instantiate(typ, universals, gen);
+            let fresh_typ = instantiate(typ.clone(), universals, gen);
             (fresh_typ, vec![])
         },
         Term::Conditional(ref pred, ref true_case, ref false_case) => {
@@ -95,12 +94,12 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             (true_type, constraints)
         },
         Term::Let(_, ref value, ref body) => {
-            let (value_type, value_constraints) = get_constraints(value, &mut context, gen);
-            if let Ok(value_sub) = unify(&mut value_constraints.clone()) {
-                let principal_value_type = apply_substitution(&value_sub, value_type);
-                let universals = type_vars_free_in(&principal_value_type);
+            let (mut value_type, value_constraints) = get_constraints(value, &mut context, gen);
+            if let Ok(value_sub) = unify(value_constraints.clone()) {
+                apply_substitution(&value_sub, &mut value_type);
+                let universals = type_vars_free_in(&value_type);
 
-                context.push((principal_value_type, universals));
+                context.push((value_type, universals));
                 get_constraints(body, &mut context, gen)
             } else {
                 // else we have an unsatisfiable constraint but we're not equipped to return an error
@@ -118,7 +117,18 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
     }
 }
 
-fn unify(mut constraints: &mut Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, String> {
+fn unify(mut constraints: Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, String> {
+
+    fn match_constraint_with_variable(t1: &Type, t2: &Type) -> Option<(usize, Type)> {
+        if let TypeVar(n) = *t1 {
+            if !occurs_in(n, t2) { return Some((n, t2.clone())); }
+        }
+        if let TypeVar(n) = *t2 {
+            if !occurs_in(n, t1) { return Some((n, t1.clone())); }
+        }
+        None
+    }
+
     match constraints.pop() {
         Some((s, t)) => {
             if s == t {
@@ -127,18 +137,14 @@ fn unify(mut constraints: &mut Vec<(Type, Type)>) -> Result<HashMap<usize, Type>
                 let mut sub = HashMap::new();
                 sub.insert(n, typ.clone());
 
-                let mut new_constraints = vec![];
-                for &mut(ref k, ref v) in constraints {
-                    let k1 = apply_substitution(&sub, k.clone());
-                    let v1 = apply_substitution(&sub, v.clone());
-                    new_constraints.push((k1, v1));
+                for &mut (ref mut k, ref mut v) in &mut constraints {
+                    apply_substitution(&sub, k);
+                    apply_substitution(&sub, v);
                 };
 
-                let mut result = unify(&mut new_constraints);
-                if let Ok(ref mut substitution) = result {
-                    insert_sub(substitution, n, typ.clone());
-                }
-                result
+                let mut substitution = unify(constraints)?;
+                insert_sub(&mut substitution, n, typ);
+                Ok(substitution)
             } else if let (Arrow(s1, s2), Arrow(t1, t2)) = (s.clone(), t.clone()) {
                 constraints.push((*s1, *t1));
                 constraints.push((*s2, *t2));
@@ -147,10 +153,7 @@ fn unify(mut constraints: &mut Vec<(Type, Type)>) -> Result<HashMap<usize, Type>
                 Err(String::from(format!("Type error: {:?} != {:?}", s, t)))
             }
         },
-        None => {
-            let substitution = HashMap::new();
-            Ok(substitution)
-        }
+        None => Ok(HashMap::new())
     }
 }
 
@@ -164,19 +167,9 @@ fn occurs_in(n: usize, t: &Type) -> bool {
     }
 }
 
-fn match_constraint_with_variable(t1: &Type, t2: &Type) -> Option<(usize, Type)> {
-    if let TypeVar(n) = *t1 {
-        if !occurs_in(n, t2) { return Some((n, t2.clone())); }
-    }
-    if let TypeVar(n) = *t2 {
-        if !occurs_in(n, t1) { return Some((n, t1.clone())); }
-    }
-    None
-}
-
-fn insert_sub(mut sub: &mut HashMap<usize, Type>, key: usize, value: Type) {
-    let new_val = apply_substitution(sub, value);
-    sub.insert(key, new_val);
+fn insert_sub(mut sub: &mut HashMap<usize, Type>, key: usize, mut value: Type) {
+    apply_substitution(sub, &mut value);
+    sub.insert(key, value);
 }
 
 /* Helpers for constraints */
