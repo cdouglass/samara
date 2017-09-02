@@ -16,14 +16,15 @@ pub fn infer_type(term: &Term, bindings: &[(String, Option<Term>)]) -> Result<Ty
 fn infer_type_(term: &Term, bindings: &[(String, Option<Term>)], mut gen: &mut GenTypeVar) -> Result<Type, String> {
     let mut context = vec![];
 
-    //TODO this is silly - just meant to let me test context is used correctly for instantiation
-    if let Some(&(_, Some(ref value))) = bindings.last() {
-        let (mut value_type, value_constraints) = get_constraints(value, &mut context, &mut gen);
-        let value_sub = unify(value_constraints)?;
-        apply_substitution(&value_sub, &mut value_type);
-        let universals = type_vars_free_in(&value_type);
+    for &(_, ref term) in bindings {
+        if let Some(ref value) = *term {
+            let (mut value_type, value_constraints) = get_constraints(value, &mut context, &mut gen);
+            let value_sub = unify(value_constraints)?;
+            apply_substitution(&value_sub, &mut value_type);
+            let universals = type_vars_free_in(&value_type);
 
-        context.push((value_type, universals));
+            context.push((value_type, universals));
+        }
     }
 
     let (mut typ, constraints) = get_constraints(term, &mut context, &mut gen);
@@ -100,7 +101,9 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
                 let universals = type_vars_free_in(&value_type);
 
                 context.push((value_type, universals));
-                get_constraints(body, &mut context, gen)
+                let result = get_constraints(body, &mut context, gen);
+                context.pop();
+                result
             } else {
                 // else we have an unsatisfiable constraint but we're not equipped to return an error
                 // so for now, we return the bad constraints and let unify be called a second time to
