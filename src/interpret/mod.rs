@@ -17,7 +17,7 @@ use self::infer::infer_type;
 #[cfg(test)]
 mod tests;
 
-pub fn type_of(expr: &str, bindings: &[(String, Option<Term>)]) -> (Result<Term, String>, Result<Type, String>) {
+pub fn type_of(expr: &str, bindings: &[(String, Term)]) -> (Result<Term, String>, Result<Type, String>) {
     let mut tokens = build_lexer(expr.trim());
     let mut session_bindings = vec![];
     let ast = parse(&mut tokens, &mut session_bindings);
@@ -30,21 +30,19 @@ pub fn type_of(expr: &str, bindings: &[(String, Option<Term>)]) -> (Result<Term,
     }
 }
 
-pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<(String, Option<Term>)>) -> Result<Term, String> {
+pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<(String, Term)>) -> Result<Term, String> {
     let mut tokens = build_lexer(expr.trim());
-    let term = parse(&mut tokens, &mut session_bindings).and_then(|x| reduce(x, session_bindings))?;
+    let mut identifiers: Vec<String> = session_bindings.into_iter().map(|x| x.0.clone()).collect();
+    let term = parse(&mut tokens, &mut identifiers).and_then(|x| reduce(x, session_bindings))?;
 
-    // last element will only lack a term if the current expression was a Let without an In
-    // in which case parse will have just pushed the tuple onto session_bindings
-    if let Some((s, None)) = session_bindings.last().cloned() {
-        session_bindings.pop();
-        session_bindings.push((s, Some(term.clone())))
+    if let Let(ref s, ref value, None) = term {
+        session_bindings.push((s.clone(), *value.clone()));
     }
 
     Ok(term)
 }
 
-fn reduce(ast: Term, session_bindings: &[(String, Option<Term>)]) -> Result<Term, String> {
+fn reduce(ast: Term, session_bindings: &[(String, Term)]) -> Result<Term, String> {
     match ast {
         App(func, arg) => {
             let f = reduce(*func, session_bindings);
@@ -65,23 +63,23 @@ fn reduce(ast: Term, session_bindings: &[(String, Option<Term>)]) -> Result<Term
         Let(name, value, body) => {
             // for now, same as lambda application except with sugar for self-reference
             // BUT will have to change once types are enforced
-            match reduce(fix(name, *value), session_bindings) {
-                Ok(val) => reduce(unshift_indices(sub_at_index(*body, &val, 0), 1), session_bindings),
+            match reduce(fix(name.clone(), *value), session_bindings) {
+                Ok(val) => {
+                    match body {
+                        Some(b) => reduce(unshift_indices(sub_at_index(*b, &val, 0), 1), session_bindings),
+                        None => Ok(Let(name, Box::new(val), None))
+                    }
+                },
                 Err(msg) => Err(msg)
             }
         },
-        Var(n, s) => {
-            // if not defined, would already have blown up in parse
-            match session_bindings[session_bindings.len() - n - 1] {
-                (_, None) => Ok(Var(n, s)),
-                (_, Some(ref term)) => Ok(term.clone())
-            }
-        },
+        // if not defined, would already have blown up in parse
+        Var(n, _) => Ok(session_bindings[session_bindings.len() - n - 1].1.clone()),
         term => Ok(term)
     }
 }
 
-fn apply(func: Term, arg: Term, session_bindings: &[(String, Option<Term>)]) -> Result<Term, String> {
+fn apply(func: Term, arg: Term, session_bindings: &[(String, Term)]) -> Result<Term, String> {
     let type_err = String::from("Type error");
     match func {
         Atom(a) => {
@@ -144,8 +142,8 @@ fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
         Let(name, value, let_body) => {
             // increment index in both value and body, since let binding applies in both
             let subbed_value = sub_at_index(*value, t, index + 1);
-            let subbed_let_body = sub_at_index(*let_body, t, index + 1);
-            Let(name, Box::new(subbed_value), Box::new(subbed_let_body))
+            let subbed_let_body = let_body.map(|b| Box::new(sub_at_index(*b, t, index + 1)));
+            Let(name, Box::new(subbed_value), subbed_let_body)
         }
     }
 }
@@ -172,8 +170,8 @@ fn shift_indices(term: &Term, distance: usize, cutoff: usize) -> Term {
         },
         Let(ref name, ref value, ref body) => {
             let shifted_value = shift_indices(value, distance, cutoff + 1);
-            let shifted_body = shift_indices(body, distance, cutoff + 1);
-            Let(name.clone(), Box::new(shifted_value), Box::new(shifted_body))
+            let shifted_body = body.clone().map(|b| Box::new(shift_indices(&b, distance, cutoff + 1)));
+            Let(name.clone(), Box::new(shifted_value), shifted_body)
         }
     }
 }
@@ -202,8 +200,8 @@ fn unshift_indices(term: Term, cutoff: usize) -> Term {
         },
         Let(name, value, body) => {
             let unshifted_value = unshift_indices(*value, cutoff + 1);
-            let unshifted_body = unshift_indices(*body, cutoff + 1);
-            Let(name, Box::new(unshifted_value), Box::new(unshifted_body))
+            let unshifted_body = body.map(|b| Box::new(unshift_indices(*b, cutoff + 1)));
+            Let(name, Box::new(unshifted_value), unshifted_body)
         }
     }
 }

@@ -8,23 +8,21 @@ use interpret::types::Term;
 use interpret::types::Type;
 use interpret::types::Type::*;
 
-pub fn infer_type(term: &Term, bindings: &[(String, Option<Term>)]) -> Result<Type, String> {
+pub fn infer_type(term: &Term, bindings: &[(String, Term)]) -> Result<Type, String> {
     let mut gen = GenTypeVar{n: 0};
     infer_type_(term, bindings, &mut gen)
 }
 
-fn infer_type_(term: &Term, bindings: &[(String, Option<Term>)], mut gen: &mut GenTypeVar) -> Result<Type, String> {
+fn infer_type_(term: &Term, bindings: &[(String, Term)], mut gen: &mut GenTypeVar) -> Result<Type, String> {
     let mut context = vec![];
 
-    for &(_, ref term) in bindings {
-        if let Some(ref value) = *term {
-            let (mut value_type, value_constraints) = get_constraints(value, &mut context, &mut gen);
-            let value_sub = unify(value_constraints)?;
-            apply_substitution(&value_sub, &mut value_type);
-            let universals = type_vars_free_in(&value_type);
+    for &(_, ref value) in bindings {
+        let (mut value_type, value_constraints) = get_constraints(value, &mut context, &mut gen);
+        let value_sub = unify(value_constraints)?;
+        apply_substitution(&value_sub, &mut value_type);
+        let universals = type_vars_free_in(&value_type);
 
-            context.push((value_type, universals));
-        }
+        context.push((value_type, universals));
     }
 
     let (mut typ, constraints) = get_constraints(term, &mut context, &mut gen);
@@ -95,13 +93,16 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             (true_type, constraints)
         },
         Term::Let(_, ref value, ref body) => {
+            context.push((gen.next().unwrap(), HashSet::new()));
             let (mut value_type, value_constraints) = get_constraints(value, &mut context, gen);
-            if let Ok(value_sub) = unify(value_constraints.clone()) {
+            if let None = *body {
+                (value_type, value_constraints)
+            } else if let Ok(value_sub) = unify(value_constraints.clone()) {
                 apply_substitution(&value_sub, &mut value_type);
                 let universals = type_vars_free_in(&value_type);
 
                 context.push((value_type, universals));
-                let result = get_constraints(body, &mut context, gen);
+                let result = get_constraints(&(body.clone().unwrap()), &mut context, gen);
                 context.pop();
                 result
             } else {
@@ -109,7 +110,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
                 // so for now, we return the bad constraints and let unify be called a second time to
                 // get the actual error
                 context.push((gen.next().unwrap(), HashSet::new()));
-                let (body_type, body_constraints) = get_constraints(body, &mut context, gen);
+                let (body_type, body_constraints) = get_constraints(&body.clone().unwrap(), &mut context, gen);
 
                 let mut constraints = value_constraints;
                 constraints.extend(body_constraints);
@@ -231,7 +232,7 @@ mod tests {
         Term::App(Box::new(func), Box::new(arg))
     }
 
-    fn assert_type_with_context(expr: &Term, t: &Type, bindings: &[(String, Option<Term>)], gen: &mut GenTypeVar) {
+    fn assert_type_with_context(expr: &Term, t: &Type, bindings: &[(String, Term)], gen: &mut GenTypeVar) {
         match infer_type_(expr, bindings, gen) {
             Ok(t1) => assert_eq!(t1, *t),
             Err(msg) => {
@@ -364,14 +365,14 @@ mod tests {
         let id = Term::Lambda(Box::new(Term::Var(0, String::from("x"))), String::from("x"));
         let v = Term::Var(0, String::from("id"));
         let poly = apply(apply(v.clone(), op_to_term(Gt)), apply(v, FIVE));
-        let term = Term::Let(String::from("id"), Box::new(id), Box::new(poly));
+        let term = Term::Let(String::from("id"), Box::new(id), Some(Box::new(poly)));
         assert_type(&term, &arrow(Int, Bool));
     }
 
     #[test]
     fn test_ill_typed_let_value_not_used_in_body() {
         let invalid = apply(op_to_term(Add), bool_to_term(false));
-        let term = Term::Let(String::from("invalid"), Box::new(invalid), Box::new(FIVE));
+        let term = Term::Let(String::from("invalid"), Box::new(invalid), Some(Box::new(FIVE)));
         assert_type_err(&term, "Type error: Bool != Int");
     }
 

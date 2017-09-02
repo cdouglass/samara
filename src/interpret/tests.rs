@@ -18,7 +18,7 @@ fn test_lex() {
 
 /* Test helpers */
 
-fn assert_evaluation_err(expr: &str, mut bindings: &mut Vec<(String, Option<Term>)>, msg: &str) {
+fn assert_evaluation_err(expr: &str, mut bindings: &mut Vec<(String, Term)>, msg: &str) {
     match evaluate(expr, bindings) {
         Err(m) => { assert_eq!(m, msg) },
         result => {
@@ -28,7 +28,7 @@ fn assert_evaluation_err(expr: &str, mut bindings: &mut Vec<(String, Option<Term
     }
 }
 
-fn assert_evaluates_to_atom(expr: &str, mut bindings: &mut Vec<(String, Option<Term>)>, expected: Atom) {
+fn assert_evaluates_to_atom(expr: &str, mut bindings: &mut Vec<(String, Term)>, expected: Atom) {
     match evaluate(expr, &mut bindings).unwrap() {
         Term::Atom(a) => assert_eq!(a, expected),
         result => {
@@ -160,8 +160,7 @@ fn test_save_session_bindings() {
     let expected = Ok(Term::Atom(Atom::Int(50)));
 
     let mut bindings = vec![];
-    let assignment_result = evaluate("let x = (* 5 10)", &mut bindings);
-    assert_eq!(assignment_result, expected);
+    evaluate("let x = (* 5 10)", &mut bindings).unwrap();
 
     let reuse = evaluate("x", &mut bindings);
     assert_eq!(reuse, expected);
