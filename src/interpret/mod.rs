@@ -11,29 +11,33 @@ use self::types::Type;
 mod parse;
 use self::parse::parse;
 
-mod infer;
+pub mod infer;
 use self::infer::infer_type;
+use self::infer::GenTypeVar;
 
 #[cfg(test)]
 mod tests;
 
-pub fn type_of(expr: &str, bindings: &[(String, Term)]) -> (Result<Term, String>, Result<Type, String>) {
-    let mut tokens = build_lexer(expr.trim());
-    let mut session_bindings = vec![];
-    let ast = parse(&mut tokens, &mut session_bindings);
+pub fn type_of(expr: &str, bindings: &[(String, Term)], mut gen: &mut GenTypeVar) -> (Result<Term, String>, Result<Type, String>) {
+    let ast = parse_from_str(expr, bindings);
     match ast {
         Ok(term) =>{
-            let typ = infer_type(&term, bindings);
+            let typ = infer_type(&term, bindings, &mut gen);
             (Ok(term), typ)
         },
         Err(msg) => (Err(msg), Err(String::from("Syntax error")))
     }
 }
 
-pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<(String, Term)>) -> Result<Term, String> {
+fn parse_from_str(expr: &str, bindings: &[(String, Term)]) -> Result<Term, String> {
     let mut tokens = build_lexer(expr.trim());
-    let mut identifiers: Vec<String> = session_bindings.into_iter().map(|x| x.0.clone()).collect();
-    let term = parse(&mut tokens, &mut identifiers).and_then(|x| reduce(x, session_bindings))?;
+    let mut identifiers: Vec<String> = bindings.into_iter().map(|x| x.0.clone()).collect();
+    parse(&mut tokens, &mut identifiers)
+}
+
+pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<(String, Term)>) -> Result<Term, String> {
+    let ast = parse_from_str(expr, &session_bindings)?;
+    let term = reduce(ast, session_bindings)?;
 
     if let Let(ref s, ref value, None) = term {
         session_bindings.push((s.clone(), *value.clone()));

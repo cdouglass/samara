@@ -34,8 +34,10 @@ fn get_command(input: &str) -> Option<Command> {
 }
 
 fn main() {
+    use interpret::infer::GenTypeVar;
     println!("{}", GREETING);
     let mut bindings = vec![];
+    let mut gen_type_var = GenTypeVar{n: 0};
 
     loop {
         print!("{}", PROMPT);
@@ -49,7 +51,7 @@ fn main() {
             Some(Command::Exit) => break,
             Some(Command::Help) => println!("{}", USAGE),
             Some(Command::TypeOf(s)) => {
-                let result = interpret::type_of(&s, &bindings);
+                let result = interpret::type_of(&s, &bindings, &mut gen_type_var);
                 match result {
                     (Ok(term), Ok(typ)) => println!("{:?} : {:?}", term, typ),
                     (Err(msg), _) | (_, Err(msg)) => println!("{}", msg)

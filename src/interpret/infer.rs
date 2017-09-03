@@ -8,12 +8,7 @@ use interpret::types::Term;
 use interpret::types::Type;
 use interpret::types::Type::*;
 
-pub fn infer_type(term: &Term, bindings: &[(String, Term)]) -> Result<Type, String> {
-    let mut gen = GenTypeVar{n: 0};
-    infer_type_(term, bindings, &mut gen)
-}
-
-fn infer_type_(term: &Term, bindings: &[(String, Term)], mut gen: &mut GenTypeVar) -> Result<Type, String> {
+pub fn infer_type(term: &Term, bindings: &[(String, Term)], mut gen: &mut GenTypeVar) -> Result<Type, String> {
     let mut context = vec![];
 
     for &(_, ref value) in bindings {
@@ -178,8 +173,8 @@ fn insert_sub(mut sub: &mut HashMap<usize, Type>, key: usize, mut value: Type) {
 
 /* Helpers for constraints */
 
-struct GenTypeVar {
-    n: usize
+pub struct GenTypeVar {
+    pub n: usize
 }
 
 impl Iterator for GenTypeVar {
@@ -233,7 +228,7 @@ mod tests {
     }
 
     fn assert_type_with_context(expr: &Term, t: &Type, bindings: &[(String, Term)], gen: &mut GenTypeVar) {
-        match infer_type_(expr, bindings, gen) {
+        match infer_type(expr, bindings, gen) {
             Ok(t1) => assert_eq!(t1, *t),
             Err(msg) => {
                 println!("Expected type {:?} but got error {:?}", t, msg);
@@ -245,7 +240,7 @@ mod tests {
     fn assert_type(expr: &Term, t: &Type) {
         let bindings = vec![];
         let mut gen = GenTypeVar{n: 0};
-        match infer_type_(expr, &bindings, &mut gen) {
+        match infer_type(expr, &bindings, &mut gen) {
             Ok(t1) => assert_eq!(t1, *t),
             Err(msg) => {
                 println!("Expected type {:?} but got error {:?}", t, msg);
@@ -257,7 +252,7 @@ mod tests {
     fn assert_type_err(expr: &Term, s: &str) {
         let bindings = vec![];
         let mut gen = GenTypeVar{n: 0};
-        match infer_type_(expr, &bindings, &mut gen) {
+        match infer_type(expr, &bindings, &mut gen) {
             Err(msg) => assert_eq!(&msg, s),
             Ok(t) => {
                 println!("Expected type error {:?} but got type {:?}", s, t);

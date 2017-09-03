@@ -1,10 +1,13 @@
 use interpret::evaluate;
 use interpret::parse;
+use interpret::type_of;
+use interpret::GenTypeVar;
 use interpret::tokenize::build_lexer;
 use interpret::tokenize::Token;
 use interpret::types::Atom;
 use interpret::types::Op;
 use interpret::types::Term;
+use interpret::types::Type;
 
 #[test]
 fn test_lex() {
@@ -171,4 +174,12 @@ fn test_recursive_session_bindings() {
     let mut bindings = vec![];
     evaluate("let fact = (\\n -> if (< n 2) then 1 else (* n (fact (- n 1))))", &mut bindings).unwrap();
     assert_evaluates_to_atom("fact 8", &mut bindings, Atom::Int(40320));
+}
+
+#[test]
+fn test_type_of_using_session_bindings() {
+    let mut bindings = vec![];
+    evaluate("let x = (* 5 10)", &mut bindings).unwrap();
+    let typ = type_of("x", &bindings, &mut GenTypeVar{n: 0}).1.unwrap();
+    assert_eq!(typ, Type::Int);
 }
