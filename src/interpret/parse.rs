@@ -146,3 +146,50 @@ fn parse_let(tokens: &mut Peekable<Lexer>, mut token_stack: &mut Vec<Token>, mut
         _ => syntax_err
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::parse;
+    use interpret::tokenize::build_lexer;
+    use interpret::types::Atom;
+    use interpret::types::Term;
+
+    fn assert_parse_err(expr: &str, msg: &str) {
+        let mut ids = vec![];
+        let mut tokens = build_lexer(expr.trim());
+        match parse(&mut tokens, &mut ids) {
+            Err(m) => assert_eq!(m, msg),
+            Ok(term) => {
+                println!("Expected parse error {} but got success {:?}", msg, term);
+                panic!()
+            }
+        }
+    }
+
+    #[test]
+    fn test_parses_lambda_application() {
+        let ast = parse(&mut build_lexer("(\\x -> (\\y -> 3)) 2"), &mut vec![]);
+        let expected =
+            Term::App(
+                Box::new(Term::Lambda(
+                    Box::new(Term::Lambda(Box::new(Term::Atom(Atom::Int(3))), String::from("y"))),
+                    "x".to_string()
+                )),
+                Box::new(Term::Atom(Atom::Int(2)))
+                );
+
+        assert_eq!(ast, Ok(expected));
+    }
+
+    #[test]
+    fn test_empty_input() {
+        assert_parse_err("", "Unexpected end of input");
+        assert_parse_err("()", "Unexpected end of input");
+    }
+
+    #[test]
+    fn test_unbalanced_delimiters() {
+        assert_parse_err("(+ 5 8))", "Unexpected CLOSE delimiter");
+        assert_parse_err("(+ 5 (8)", "Unexpected end of input");
+    }
+}

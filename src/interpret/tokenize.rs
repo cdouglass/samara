@@ -129,3 +129,19 @@ fn update_if_match(s: &mut String, ch: Option<char>, predicate: &Fn(char) -> boo
         p
     }).unwrap_or(false)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::build_lexer;
+    use super::Token;
+
+    #[test]
+    fn test_lex() {
+        let input = "(5  5 * / // +34()";
+        let expected = [Token::Open, Token::Number(String::from("5")), Token::Number(String::from("5")), Token::Operator(String::from("*")), Token::Operator(String::from("/")), Token::Operator(String::from("//")), Token::Operator(String::from("+")), Token::Number(String::from("34")), Token::Open, Token::Close];
+        let actual : Vec<Token>  = build_lexer(input).collect();
+        println!("expected: {:?}", expected);
+        println!("actual: {:?}", actual);
+        assert!(actual == expected);
+    }
+}

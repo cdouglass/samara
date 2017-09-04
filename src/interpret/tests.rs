@@ -1,24 +1,11 @@
 use interpret::evaluate;
-use interpret::parse;
 use interpret::type_of;
 use interpret::GenTypeVar;
-use interpret::tokenize::build_lexer;
-use interpret::tokenize::Token;
 use interpret::types::Atom;
 use interpret::types::LetBinding;
 use interpret::types::Op;
 use interpret::types::Term;
 use interpret::types::Type;
-
-#[test]
-fn test_lex() {
-    let input = "(5  5 * / // +34()";
-    let expected = [Token::Open, Token::Number(String::from("5")), Token::Number(String::from("5")), Token::Operator(String::from("*")), Token::Operator(String::from("/")), Token::Operator(String::from("//")), Token::Operator(String::from("+")), Token::Number(String::from("34")), Token::Open, Token::Close];
-    let actual : Vec<Token>  = build_lexer(input).collect();
-    println!("expected: {:?}", expected);
-    println!("actual: {:?}", actual);
-    assert!(actual == expected);
-}
 
 /* Test helpers */
 
@@ -45,39 +32,6 @@ fn assert_evaluates_to_atom(expr: &str, mut bindings: &mut Vec<LetBinding>, mut 
 fn make_gen() -> GenTypeVar {
     GenTypeVar{n: 0}
 }
-
-/* Parsing */
-
-#[test]
-fn test_parses_lambda_application() {
-    let ast = parse(&mut build_lexer("(\\x -> (\\y -> 3)) 2"), &mut vec![]);
-    let expected =
-        Term::App(
-            Box::new(Term::Lambda(
-                Box::new(Term::Lambda(Box::new(Term::Atom(Atom::Int(3))), String::from("y"))),
-                "x".to_string()
-            )),
-            Box::new(Term::Atom(Atom::Int(2)))
-            );
-
-    assert_eq!(ast, Ok(expected));
-}
-
-    /* Syntax errors */
-
-#[test]
-fn test_empty_input() {
-    assert_evaluation_err("", &mut vec![], &mut make_gen(), "Unexpected end of input");
-    assert_evaluation_err("()", &mut vec![], &mut make_gen(), "Unexpected end of input");
-}
-
-#[test]
-fn test_unbalanced_delimiters() {
-    assert_evaluation_err("(+ 5 8))", &mut vec![], &mut make_gen(), "Unexpected CLOSE delimiter");
-    assert_evaluation_err("(+ 5 (8)", &mut vec![], &mut make_gen(), "Unexpected end of input");
-}
-
-/* Type errors */
 
 #[test]
 fn test_too_many_arguments() {
