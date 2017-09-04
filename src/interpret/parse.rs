@@ -72,6 +72,12 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut token_stack: &mut Vec<Token>, mu
                     },
                 }
             },
+            Some(Token::Constructor(s)) => {
+                tokens.next();
+                //TODO look up
+                //TODO hold a value
+                Ok(Term::Sum(s))
+            },
             Some(Token::Identifier(s)) => {
                 tokens.next();
                 let mut stack = identifier_stack.iter().rev();

@@ -35,7 +35,9 @@ pub enum Term {
     Lambda(Box<Term>, String), // uses de Bruijn indices internally, but keeps name for debugging
     Var(usize, String),
     Conditional(Box<Term>, Box<Term>, Box<Term>), // predicate, true case, false case
-    Let(String, Box<Term>, Option<Box<Term>>) // variable name, value, body (only one binding per let, for now)
+    Let(String, Box<Term>, Option<Box<Term>>), // variable name, value, body (only one binding per let, for now)
+    //TODO
+    Sum(String)
 }
 
 pub struct LetBinding {
@@ -50,7 +52,9 @@ pub enum Type {
     Bool,
     Int,
     Arrow(Box<Type>, Box<Type>),
-    TypeVar(usize)
+    TypeVar(usize),
+    //TODO
+    Sum
 }
 
 impl Debug for Op {
@@ -93,7 +97,9 @@ impl Debug for Term {
                     Some(ref b) => write!(f, "LET {} = {:?} IN {:?}", name, value, b),
                     None => write!(f, "LET {} = {:?}", name, value)
                 }
-            }
+            },
+            //TODO
+            Term::Sum(ref constructor) => write!(f, "{}", constructor)
         }
     }
 }
@@ -104,7 +110,9 @@ impl Debug for Type {
             Type::Bool => write!(f, "Bool"),
             Type::Int => write!(f, "Int"),
             Type::Arrow(ref a, ref b) => write!(f, "{:?} -> {:?}", *a, *b),
-            Type::TypeVar(n) => write!(f, "t{:?}", n)
+            Type::TypeVar(n) => write!(f, "t{:?}", n),
+            //TODO
+            Type::Sum => write!(f, "Sum")
         }
     }
 }

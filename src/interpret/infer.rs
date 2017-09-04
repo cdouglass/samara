@@ -103,7 +103,9 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
                     Ok(result)
                 }
             }
-        }
+        },
+        //TODO lookup
+        Term::Sum(ref c) => Ok((Sum, vec![]))
     }
 }
 

@@ -10,6 +10,7 @@ pub enum Token {
     Close,
     Lambda,
     Keyword(Keyword),
+    Constructor(String),
     Identifier(String),
     Number(String),
     Operator(String)
@@ -64,6 +65,10 @@ impl<'a> Iterator for Lexer<'a> {
                 Some(Token::Open) | Some(Token::Close) | Some(Token::Lambda) | Some(Token::Keyword(_)) => {
                     return token;
                 },
+                Some(Token::Constructor(ref mut s)) => {
+                    if update_if_match(s, ch, &is_identifier, &mut self.it) {
+                    } else { break; }
+                },
                 Some(Token::Identifier(ref mut s)) => {
                     if update_if_match(s, ch, &is_identifier, &mut self.it) {
                     } else { break; }
@@ -84,6 +89,8 @@ impl<'a> Iterator for Lexer<'a> {
                         Some(c) => {
                             if is_operator(c) {
                                 token = Some(Token::Operator(c.to_string()));
+                            } else if c.is_uppercase() {
+                                token = Some(Token::Constructor(c.to_string()));
                             } else if c.is_alphabetic() {
                                 token = Some(Token::Identifier(c.to_string()));
                             } else if c.is_numeric() {
@@ -140,8 +147,14 @@ mod tests {
         let input = "(5  5 * / // +34()";
         let expected = [Token::Open, Token::Number(String::from("5")), Token::Number(String::from("5")), Token::Operator(String::from("*")), Token::Operator(String::from("/")), Token::Operator(String::from("//")), Token::Operator(String::from("+")), Token::Number(String::from("34")), Token::Open, Token::Close];
         let actual : Vec<Token>  = build_lexer(input).collect();
-        println!("expected: {:?}", expected);
-        println!("actual: {:?}", actual);
-        assert!(actual == expected);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_constructors() {
+        let input = "foo Bar bAZ";
+        let expected = [Token::Identifier(String::from("foo")), Token::Constructor(String::from("Bar")), Token::Identifier(String::from("bAZ"))];
+        let actual : Vec<Token> = build_lexer(input).collect();
+        assert_eq!(actual, expected);
     }
 }

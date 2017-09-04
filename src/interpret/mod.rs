@@ -120,7 +120,8 @@ fn apply(func: Term, arg: Term, session_bindings: &[LetBinding]) -> Result<Term,
         // func is already reduced, so should not be in any of these forms
         Conditional(_, _, _) | Var(_, _) | Let(_, _, _) => {
             Err(type_err)
-        }
+        },
+        Sum(c) => Err(type_err)
     }
 }
 
@@ -128,6 +129,8 @@ fn apply(func: Term, arg: Term, session_bindings: &[LetBinding]) -> Result<Term,
 fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
     match body {
         Atom(a) => Atom(a),
+        //TODO
+        Sum(c) => Sum(c),
         App(a, b) => {
             let subbed_a = sub_at_index(*a, t, index);
             let subbed_b = sub_at_index(*b, t, index);
@@ -160,6 +163,8 @@ fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
 fn shift_indices(term: &Term, distance: usize, cutoff: usize) -> Term {
     match *term {
         Atom(ref a) => Atom(a.clone()),
+        //TODO
+        Sum(ref c) => Sum(c.clone()),
         App(ref a, ref b) => {
             let a_ = shift_indices(a, distance, cutoff);
             let b_ = shift_indices(b, distance, cutoff);
@@ -188,6 +193,8 @@ fn shift_indices(term: &Term, distance: usize, cutoff: usize) -> Term {
 fn unshift_indices(term: Term, cutoff: usize) -> Term {
     match term {
         Atom(a) => Atom(a),
+        //TODO
+        Sum(c) => Sum(c),
         App(a, b) => {
             let a_ = unshift_indices(*a, cutoff);
             let b_ = unshift_indices(*b, cutoff);
