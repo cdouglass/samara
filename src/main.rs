@@ -4,9 +4,11 @@ use std::iter::Iterator;
 
 mod interpret;
 
-const GREETING : &str = "---- samara 0.1.0 --------------------------------------------------------------";
-const PROMPT : &str = "> ";
 const CMD_MARKER : char = ':';
+const CONTINUE_LINE : char = '\\';
+const CONTINUE_PROMPT : &str = "| ";
+const PROMPT : &str = "> ";
+const GREETING : &str = "---- samara 0.1.0 --------------------------------------------------------------";
 const USAGE : &str = "Available commands:\n:exit        - exit\n:help        - help\n:type <expr> - show type of <expr>";
 
 pub enum Command {
@@ -46,6 +48,20 @@ fn main() {
         let mut expr = String::new();
         io::stdin().read_line(&mut expr).unwrap();
 
+        loop {
+            expr.pop();
+            if expr.chars().last() == Some(CONTINUE_LINE) {
+                expr.pop();
+
+                print!("{}", CONTINUE_PROMPT);
+                io::stdout().flush().unwrap();
+
+                io::stdin().read_line(&mut expr).unwrap();
+            } else {
+                break;
+            }
+        }
+
         let cmd = get_command(&expr);
         match cmd {
             Some(Command::Exit) => break,
@@ -59,6 +75,7 @@ fn main() {
             }
             Some(Command::Unknown) => println!("Unknown command"),
             None => {
+
                 let result = interpret::evaluate(&expr, &mut bindings);
                 match result {
                     Ok(term) => println!("{:?}", term),
