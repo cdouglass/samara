@@ -12,7 +12,7 @@ pub fn infer_type(term: &Term, bindings: &[(String, Term)], mut gen: &mut GenTyp
     let mut context = vec![];
 
     for &(_, ref value) in bindings {
-        let (mut value_type, value_constraints) = get_constraints(value, &mut context, &mut gen);
+        let (mut value_type, value_constraints) = get_constraints(value, &mut context, &mut gen).unwrap();
         let value_sub = unify(value_constraints)?;
         apply_substitution(&value_sub, &mut value_type);
         let universals = type_vars_free_in(&value_type);
@@ -20,7 +20,7 @@ pub fn infer_type(term: &Term, bindings: &[(String, Term)], mut gen: &mut GenTyp
         context.push((value_type, universals));
     }
 
-    let (mut typ, constraints) = get_constraints(term, &mut context, &mut gen);
+    let (mut typ, constraints) = get_constraints(term, &mut context, &mut gen)?;
     let substitution = unify(constraints)?;
     apply_substitution(&substitution, &mut typ);
     Ok(typ)
@@ -50,12 +50,12 @@ fn instantiate(mut typ: Type, universals: &HashSet<usize>, mut gen: &mut GenType
     typ
 }
 
-fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar) -> (Type, Vec<(Type, Type)>) {
+fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar) -> Result<(Type, Vec<(Type, Type)>), String> {
     match *term {
-        Term::Atom(ref atom) => (base_type(atom), vec![]),
+        Term::Atom(ref atom) => Ok((base_type(atom), vec![])),
         Term::App(ref left, ref right) => {
-            let (left_type, left_constraints) = get_constraints(left, &mut context, gen);
-            let (right_type, right_constraints) = get_constraints(right, &mut context, gen);
+            let (left_type, left_constraints) = get_constraints(left, &mut context, gen)?;
+            let (right_type, right_constraints) = get_constraints(right, &mut context, gen)?;
             let a = gen.next().unwrap();
             let b = gen.next().unwrap();
             let mut constraints = left_constraints;
@@ -63,54 +63,44 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             constraints.push((arrow(a.clone(), b.clone()), left_type));
             constraints.push((a, right_type));
 
-            (b, constraints)
+            Ok((b, constraints))
         },
         Term::Lambda(ref body, _) => {
             context.push((gen.next().unwrap(), HashSet::new()));
-            let (body_type, body_constraints) = get_constraints(body, &mut context, gen);
-            (arrow(context.pop().unwrap().0, body_type), body_constraints)
+            let (body_type, body_constraints) = get_constraints(body, &mut context, gen)?;
+            Ok((arrow(context.pop().unwrap().0, body_type), body_constraints))
         },
         Term::Var(ref n, _) => {
             let (ref typ, ref universals) = context[context.len() - n - 1];
             let fresh_typ = instantiate(typ.clone(), universals, gen);
-            (fresh_typ, vec![])
+            Ok((fresh_typ, vec![]))
         },
         Term::Conditional(ref pred, ref true_case, ref false_case) => {
-            let (pred_type, pred_constraints) = get_constraints(pred, &mut context, gen);
-            let (true_type, true_constraints) = get_constraints(true_case, &mut context, gen);
-            let (false_type, false_constraints) = get_constraints(false_case, &mut context, gen);
+            let (pred_type, pred_constraints) = get_constraints(pred, &mut context, gen)?;
+            let (true_type, true_constraints) = get_constraints(true_case, &mut context, gen)?;
+            let (false_type, false_constraints) = get_constraints(false_case, &mut context, gen)?;
             let mut constraints = pred_constraints;
             constraints.extend(true_constraints);
             constraints.extend(false_constraints);
             constraints.push((pred_type, Bool));
             constraints.push((true_type.clone(), false_type));
 
-            (true_type, constraints)
+            Ok((true_type, constraints))
         },
         Term::Let(_, ref value, ref body) => {
             context.push((gen.next().unwrap(), HashSet::new()));
-            let (mut value_type, value_constraints) = get_constraints(value, &mut context, gen);
+            let (mut value_type, value_constraints) = get_constraints(value, &mut context, gen)?;
             if let None = *body {
-                (value_type, value_constraints)
-            } else if let Ok(value_sub) = unify(value_constraints.clone()) {
+                Ok((value_type, value_constraints))
+            } else {
+                let value_sub = unify(value_constraints.clone())?;
                 apply_substitution(&value_sub, &mut value_type);
                 let universals = type_vars_free_in(&value_type);
 
                 context.push((value_type, universals));
-                let result = get_constraints(&(body.clone().unwrap()), &mut context, gen);
+                let result = get_constraints(&(body.clone().unwrap()), &mut context, gen)?;
                 context.pop();
-                result
-            } else {
-                // else we have an unsatisfiable constraint but we're not equipped to return an error
-                // so for now, we return the bad constraints and let unify be called a second time to
-                // get the actual error
-                context.push((gen.next().unwrap(), HashSet::new()));
-                let (body_type, body_constraints) = get_constraints(&body.clone().unwrap(), &mut context, gen);
-
-                let mut constraints = value_constraints;
-                constraints.extend(body_constraints);
-                constraints.push((context.pop().unwrap().0, value_type));
-                (body_type, constraints)
+                Ok(result)
             }
         }
     }
