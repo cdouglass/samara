@@ -3,21 +3,18 @@ use std::collections::HashSet;
 use std::iter::Iterator;
 
 use interpret::types::Atom;
+use interpret::types::LetBinding;
 use interpret::types::Op;
 use interpret::types::Term;
 use interpret::types::Type;
 use interpret::types::Type::*;
 
-pub fn infer_type(term: &Term, bindings: &[(String, Term)], mut gen: &mut GenTypeVar) -> Result<Type, String> {
+pub fn infer_type(term: &Term, bindings: &[LetBinding], mut gen: &mut GenTypeVar) -> Result<Type, String> {
     let mut context = vec![];
 
-    for &(_, ref value) in bindings {
-        let (mut value_type, value_constraints) = get_constraints(value, &mut context, &mut gen).unwrap();
-        let value_sub = unify(value_constraints)?;
-        apply_substitution(&value_sub, &mut value_type);
-        let universals = type_vars_free_in(&value_type);
-
-        context.push((value_type, universals));
+    for b in bindings {
+        let universals = type_vars_free_in(&b.typ);
+        context.push((b.typ.clone(), universals));
     }
 
     let (mut typ, constraints) = get_constraints(term, &mut context, &mut gen)?;
@@ -89,18 +86,22 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
         },
         Term::Let(_, ref value, ref body) => {
             context.push((gen.next().unwrap(), HashSet::new()));
-            let (mut value_type, value_constraints) = get_constraints(value, &mut context, gen)?;
-            if let None = *body {
-                Ok((value_type, value_constraints))
-            } else {
-                let value_sub = unify(value_constraints.clone())?;
-                apply_substitution(&value_sub, &mut value_type);
-                let universals = type_vars_free_in(&value_type);
+            match *body {
+                None =>  {
+                    let (value_type, value_constraints) = get_constraints(value, &mut context, gen)?;
+                    Ok((value_type, value_constraints))
+                },
+                Some(ref b) => {
+                    let (mut value_type, value_constraints) = get_constraints(value, &mut context, gen)?;
+                    let value_sub = unify(value_constraints.clone())?;
+                    apply_substitution(&value_sub, &mut value_type);
+                    let universals = type_vars_free_in(&value_type);
 
-                context.push((value_type, universals));
-                let result = get_constraints(&(body.clone().unwrap()), &mut context, gen)?;
-                context.pop();
-                Ok(result)
+                    context.push((value_type, universals));
+                    let result = get_constraints(b, &mut context, gen)?;
+                    context.pop();
+                    Ok(result)
+                }
             }
         }
     }
@@ -209,6 +210,7 @@ fn base_type(atom: &Atom) -> Type {
 mod tests {
     use super::*;
     use interpret::evaluate;
+    use self::LetBinding;
     use self::Op::*;
 
     const FIVE : Term = Term::Atom(Atom::Int(5));
@@ -217,7 +219,7 @@ mod tests {
         Term::App(Box::new(func), Box::new(arg))
     }
 
-    fn assert_type_with_context(expr: &Term, t: &Type, bindings: &[(String, Term)], gen: &mut GenTypeVar) {
+    fn assert_type_with_context(expr: &Term, t: &Type, bindings: &[LetBinding], gen: &mut GenTypeVar) {
         match infer_type(expr, bindings, gen) {
             Ok(t1) => assert_eq!(t1, *t),
             Err(msg) => {
@@ -367,8 +369,8 @@ mod tests {
         let mut gen = GenTypeVar{n: 0};
         evaluate("let id = (\\x -> x)", &mut bindings, &mut gen).unwrap();
         let x = Term::Var(0, String::new());
+        assert_type_with_context(&x, &arrow(TypeVar(3), TypeVar(3)), &bindings, &mut gen);
         assert_type_with_context(&x, &arrow(TypeVar(4), TypeVar(4)), &bindings, &mut gen);
-        assert_type_with_context(&x, &arrow(TypeVar(6), TypeVar(6)), &bindings, &mut gen);
-        assert_type_with_context(&x, &arrow(TypeVar(8), TypeVar(8)), &bindings, &mut gen);
+        assert_type_with_context(&x, &arrow(TypeVar(5), TypeVar(5)), &bindings, &mut gen);
     }
 }

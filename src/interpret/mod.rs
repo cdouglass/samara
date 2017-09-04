@@ -3,6 +3,7 @@ use self::tokenize::build_lexer;
 
 mod types;
 use self::types::Atom::*;
+use self::types::LetBinding;
 use self::types::Op::*;
 use self::types::Term;
 use self::types::Term::*;
@@ -18,7 +19,7 @@ use self::infer::GenTypeVar;
 #[cfg(test)]
 mod tests;
 
-pub fn type_of(expr: &str, bindings: &[(String, Term)], mut gen: &mut GenTypeVar) -> (Result<Term, String>, Result<Type, String>) {
+pub fn type_of(expr: &str, bindings: &[LetBinding], mut gen: &mut GenTypeVar) -> (Result<Term, String>, Result<Type, String>) {
     let ast = parse_from_str(expr, bindings);
     match ast {
         Ok(term) =>{
@@ -29,20 +30,20 @@ pub fn type_of(expr: &str, bindings: &[(String, Term)], mut gen: &mut GenTypeVar
     }
 }
 
-fn parse_from_str(expr: &str, bindings: &[(String, Term)]) -> Result<Term, String> {
+fn parse_from_str(expr: &str, bindings: &[LetBinding]) -> Result<Term, String> {
     let mut tokens = build_lexer(expr.trim());
-    let mut identifiers: Vec<String> = bindings.into_iter().map(|x| x.0.clone()).collect();
+    let mut identifiers: Vec<String> = bindings.into_iter().map(|x| x.name.clone()).collect();
     parse(&mut tokens, &mut identifiers)
 }
 
-pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<(String, Term)>, mut gen: &mut GenTypeVar) -> Result<Term, String> {
+pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar) -> Result<Term, String> {
     match type_of(expr, session_bindings, gen) {
         (Err(msg), _) | (_, Err(msg)) => Err(msg),
-        (Ok(ast), Ok(_)) => {
+        (Ok(ast), Ok(typ)) => {
             let term = reduce(ast, session_bindings)?;
 
             if let Let(ref s, ref value, None) = term {
-                session_bindings.push((s.clone(), *value.clone()));
+                session_bindings.push(LetBinding{name: s.clone(), term: *value.clone(), typ: typ.clone()});
             }
 
             Ok(term)
@@ -50,7 +51,7 @@ pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<(String, Term)>, mut 
     }
 }
 
-fn reduce(ast: Term, session_bindings: &[(String, Term)]) -> Result<Term, String> {
+fn reduce(ast: Term, session_bindings: &[LetBinding]) -> Result<Term, String> {
     match ast {
         App(func, arg) => {
             let f = reduce(*func, session_bindings);
@@ -82,12 +83,12 @@ fn reduce(ast: Term, session_bindings: &[(String, Term)]) -> Result<Term, String
             }
         },
         // if not defined, would already have blown up in parse
-        Var(n, _) => Ok(session_bindings[session_bindings.len() - n - 1].1.clone()),
+        Var(n, _) => Ok(session_bindings[session_bindings.len() - n - 1].term.clone()),
         term => Ok(term)
     }
 }
 
-fn apply(func: Term, arg: Term, session_bindings: &[(String, Term)]) -> Result<Term, String> {
+fn apply(func: Term, arg: Term, session_bindings: &[LetBinding]) -> Result<Term, String> {
     let type_err = String::from("Type error");
     match func {
         Atom(a) => {

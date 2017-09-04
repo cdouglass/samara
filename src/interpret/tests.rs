@@ -5,6 +5,7 @@ use interpret::GenTypeVar;
 use interpret::tokenize::build_lexer;
 use interpret::tokenize::Token;
 use interpret::types::Atom;
+use interpret::types::LetBinding;
 use interpret::types::Op;
 use interpret::types::Term;
 use interpret::types::Type;
@@ -21,7 +22,7 @@ fn test_lex() {
 
 /* Test helpers */
 
-fn assert_evaluation_err(expr: &str, mut bindings: &mut Vec<(String, Term)>, mut gen: &mut GenTypeVar, msg: &str) {
+fn assert_evaluation_err(expr: &str, mut bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar, msg: &str) {
     match evaluate(expr, bindings, gen) {
         Err(m) => { assert_eq!(m, msg) },
         result => {
@@ -31,7 +32,7 @@ fn assert_evaluation_err(expr: &str, mut bindings: &mut Vec<(String, Term)>, mut
     }
 }
 
-fn assert_evaluates_to_atom(expr: &str, mut bindings: &mut Vec<(String, Term)>, mut gen: &mut GenTypeVar, expected: Atom) {
+fn assert_evaluates_to_atom(expr: &str, mut bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar, expected: Atom) {
     match evaluate(expr, &mut bindings, gen).unwrap() {
         Term::Atom(a) => assert_eq!(a, expected),
         result => {
@@ -183,7 +184,6 @@ fn test_save_session_bindings() {
 }
 
 #[test]
-//FIXME
 fn test_recursive_session_bindings() {
     let mut bindings = vec![];
     let mut gen = make_gen();

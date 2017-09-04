@@ -38,6 +38,12 @@ pub enum Term {
     Let(String, Box<Term>, Option<Box<Term>>) // variable name, value, body (only one binding per let, for now)
 }
 
+pub struct LetBinding {
+    pub name: String,
+    pub term: Term,
+    pub typ: Type
+}
+
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub enum Type {
