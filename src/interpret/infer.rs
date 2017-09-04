@@ -365,10 +365,10 @@ mod tests {
     fn test_fresh_instantiation() {
         let mut bindings = vec![];
         let mut gen = GenTypeVar{n: 0};
-        evaluate("let id = (\\x -> x)", &mut bindings).unwrap();
+        evaluate("let id = (\\x -> x)", &mut bindings, &mut gen).unwrap();
         let x = Term::Var(0, String::new());
-        assert_type_with_context(&x, &arrow(TypeVar(2), TypeVar(2)), &bindings, &mut gen);
         assert_type_with_context(&x, &arrow(TypeVar(4), TypeVar(4)), &bindings, &mut gen);
         assert_type_with_context(&x, &arrow(TypeVar(6), TypeVar(6)), &bindings, &mut gen);
+        assert_type_with_context(&x, &arrow(TypeVar(8), TypeVar(8)), &bindings, &mut gen);
     }
 }

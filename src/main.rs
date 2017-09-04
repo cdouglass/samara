@@ -76,7 +76,7 @@ fn main() {
             Some(Command::Unknown) => println!("Unknown command"),
             None => {
 
-                let result = interpret::evaluate(&expr, &mut bindings);
+                let result = interpret::evaluate(&expr, &mut bindings, &mut gen_type_var);
                 match result {
                     Ok(term) => println!("{:?}", term),
                     Err(msg) => println!("{}", msg)

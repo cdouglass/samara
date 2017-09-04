@@ -35,15 +35,19 @@ fn parse_from_str(expr: &str, bindings: &[(String, Term)]) -> Result<Term, Strin
     parse(&mut tokens, &mut identifiers)
 }
 
-pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<(String, Term)>) -> Result<Term, String> {
-    let ast = parse_from_str(expr, &session_bindings)?;
-    let term = reduce(ast, session_bindings)?;
+pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<(String, Term)>, mut gen: &mut GenTypeVar) -> Result<Term, String> {
+    match type_of(expr, session_bindings, gen) {
+        (Err(msg), _) | (_, Err(msg)) => Err(msg),
+        (Ok(ast), Ok(_)) => {
+            let term = reduce(ast, session_bindings)?;
 
-    if let Let(ref s, ref value, None) = term {
-        session_bindings.push((s.clone(), *value.clone()));
+            if let Let(ref s, ref value, None) = term {
+                session_bindings.push((s.clone(), *value.clone()));
+            }
+
+            Ok(term)
+        }
     }
-
-    Ok(term)
 }
 
 fn reduce(ast: Term, session_bindings: &[(String, Term)]) -> Result<Term, String> {
