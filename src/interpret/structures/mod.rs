@@ -3,6 +3,8 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
+mod sums;
+
 use self::Op::*;
 
 #[derive(Clone)]
@@ -48,7 +50,9 @@ pub struct LetBinding {
 }
 
 #[derive(Clone)]
+#[derive(Eq)]
 #[derive(PartialEq)]
+#[derive(Hash)]
 pub enum Type {
     Unit,
     Bool,

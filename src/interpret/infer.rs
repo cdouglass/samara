@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::Iterator;
 
-use interpret::types::Atom;
-use interpret::types::LetBinding;
-use interpret::types::Op;
-use interpret::types::Term;
-use interpret::types::Type;
-use interpret::types::Type::*;
+use interpret::structures::Atom;
+use interpret::structures::LetBinding;
+use interpret::structures::Op;
+use interpret::structures::Term;
+use interpret::structures::Type;
+use interpret::structures::Type::*;
 
 pub fn infer_type(term: &Term, bindings: &[LetBinding], mut gen: &mut GenTypeVar) -> Result<Type, String> {
     let mut context = vec![];

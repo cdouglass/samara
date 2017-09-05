@@ -2,13 +2,13 @@ use std::iter::Iterator;
 use std::iter::Peekable;
 use std::str::FromStr;
 
-use interpret::tokenize::Lexer;
-use interpret::tokenize::Token;
-use interpret::tokenize::Keyword::*;
+use interpret::lex::Lexer;
+use interpret::lex::Token;
+use interpret::lex::Keyword::*;
 
-use interpret::types::Atom;
-use interpret::types::Op;
-use interpret::types::Term;
+use interpret::structures::Atom;
+use interpret::structures::Op;
+use interpret::structures::Term;
 
 pub fn parse(mut tokens: &mut Peekable<Lexer>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
     let mut token_stack = vec![];
@@ -160,9 +160,9 @@ fn parse_let(tokens: &mut Peekable<Lexer>, mut token_stack: &mut Vec<Token>, mut
 #[cfg(test)]
 mod tests {
     use super::parse;
-    use interpret::tokenize::build_lexer;
-    use interpret::types::Atom;
-    use interpret::types::Term;
+    use interpret::lex::build_lexer;
+    use interpret::structures::Atom;
+    use interpret::structures::Term;
 
     fn assert_parse(expr: &str, expected: Term) {
         let mut ids = vec![];

@@ -1,13 +1,13 @@
-mod tokenize;
-use self::tokenize::build_lexer;
+mod lex;
+use self::lex::build_lexer;
 
-mod types;
-use self::types::Atom::*;
-use self::types::LetBinding;
-use self::types::Op::*;
-use self::types::Term;
-use self::types::Term::*;
-use self::types::Type;
+mod structures;
+use self::structures::Atom::*;
+use self::structures::LetBinding;
+use self::structures::Op::*;
+use self::structures::Term;
+use self::structures::Term::*;
+use self::structures::Type;
 
 mod parse;
 use self::parse::parse;

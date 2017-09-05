@@ -1,11 +1,11 @@
 use interpret::evaluate;
 use interpret::type_of;
 use interpret::GenTypeVar;
-use interpret::types::Atom;
-use interpret::types::LetBinding;
-use interpret::types::Op;
-use interpret::types::Term;
-use interpret::types::Type;
+use interpret::structures::Atom;
+use interpret::structures::LetBinding;
+use interpret::structures::Op;
+use interpret::structures::Term;
+use interpret::structures::Type;
 
 /* Test helpers */
 
