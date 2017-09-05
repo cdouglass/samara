@@ -66,7 +66,14 @@ mod tests {
 
     #[test]
     fn test_constructor_names_must_be_unique() {
-        //TODO
+        let mut defs = SumTypeDefs::new();
+        let constructors = vec![Constructor::new("Just", TypeVar(0)), Constructor::new("None", Unit)];
+        defs.insert("Maybe", constructors).unwrap();
+        let dup = vec![Constructor::new("Foo", Int), Constructor::new("None", Bool)];
+        match defs.insert("Maybe", dup) {
+            Ok(()) => panic!("Should not allow new sum type that reuses an existing constructor name!"),
+            Err(msg) => assert_eq!(&msg, "Ambiguous constructor: None is already defined in type Maybe!")
+        }
     }
 
     #[test]
