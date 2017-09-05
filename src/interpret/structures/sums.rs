@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 use interpret::structures::Type;
 use interpret::structures::Type::*;
 
 pub struct SumTypeDefs {
-    //TODO
+    constructors: HashMap<String, Constructor>
 }
 
 impl SumTypeDefs {
@@ -24,11 +25,17 @@ impl SumTypeDefs {
          *   -there is already a constructor with that name
          * OK if type name already exists
          */
+        for c in constructors {
+            match self.constructors.get(&c.name) {
+                Some(_) => { return Err(String::from(format!("Ambiguous constructor: {} is already defined for another type", c.name)));},
+                None => { self.constructors.insert(c.name.clone(), c); }
+            }
+        }
         Ok(())
     }
 
     pub fn new() -> SumTypeDefs {
-        SumTypeDefs{}
+        SumTypeDefs{constructors: HashMap::new()}
     }
 }
 
@@ -51,11 +58,17 @@ impl Constructor {
 mod tests {
     use super::*;
 
+    /* Helpers */
+    fn maybe() -> Vec<Constructor> {
+        vec![Constructor::new("Just", TypeVar(0)), Constructor::new("None", Unit)]
+    }
+
+    /* Tests */
+
     #[test]
     fn test_insert_valid_type() {
         let mut defs = SumTypeDefs::new();
-        let constructors = vec![Constructor::new("Just", TypeVar(0)), Constructor::new("None", Unit)];
-        match defs.insert("Maybe", constructors) {
+        match defs.insert("Maybe", maybe()) {
             Err(msg) => {
                 println!("Error: {}", msg);
                 panic!()
@@ -67,12 +80,11 @@ mod tests {
     #[test]
     fn test_constructor_names_must_be_unique() {
         let mut defs = SumTypeDefs::new();
-        let constructors = vec![Constructor::new("Just", TypeVar(0)), Constructor::new("None", Unit)];
-        defs.insert("Maybe", constructors).unwrap();
+        defs.insert("Maybe", maybe()).unwrap();
         let dup = vec![Constructor::new("Foo", Int), Constructor::new("None", Bool)];
         match defs.insert("Maybe", dup) {
             Ok(()) => panic!("Should not allow new sum type that reuses an existing constructor name!"),
-            Err(msg) => assert_eq!(&msg, "Ambiguous constructor: None is already defined in type Maybe!")
+            Err(msg) => assert_eq!(&msg, "Ambiguous constructor: None is already defined for another type")
         }
     }
 
