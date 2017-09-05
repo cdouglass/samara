@@ -5,13 +5,16 @@ use interpret::structures::Type;
 use interpret::structures::Type::*;
 
 pub struct SumTypeDefs {
-    constructors: HashMap<String, Constructor>
+    constructors: HashMap<String, Constructor>,
+    types: HashMap<String, String> //key: constructor name, value: type name
 }
 
 impl SumTypeDefs {
-    pub fn type_of(&self, constr: Constructor) -> Type {
-        //TODO
-        Unit
+    pub fn type_of(&self, constr: Constructor) -> Result<Type, String> {
+        match self.types.get(&constr.name) {
+            Some(type_name) => Ok(Sum(type_name.clone())),
+            None => Err(String::from(format!("Constructor {} does not exist", constr.name)))
+        }
     }
 
     pub fn all_constructors(&self, typ: Type) -> HashSet<Constructor> {
@@ -26,20 +29,22 @@ impl SumTypeDefs {
          * OK if type name already exists
          */
         for c in constructors {
-            match self.constructors.get(&c.name) {
-                Some(_) => { return Err(String::from(format!("Ambiguous constructor: {} is already defined for another type", c.name)));},
-                None => { self.constructors.insert(c.name.clone(), c); }
+            if let Ok(t) = self.type_of(c.clone()) {
+                    return Err(String::from(format!("Ambiguous constructor: {} is already defined for type {}", c.name, t.name)));
             }
+            self.types.insert(c.name.clone(), String::from(name));
+            self.constructors.insert(c.name.clone(), c);
         }
         Ok(())
     }
 
     pub fn new() -> SumTypeDefs {
-        SumTypeDefs{constructors: HashMap::new()}
+        SumTypeDefs{constructors: HashMap::new(), types: HashMap::new()}
     }
 }
 
 #[derive(Debug)]
+#[derive(Clone)]
 #[derive(Eq)]
 #[derive(PartialEq)]
 #[derive(Hash)]
@@ -84,7 +89,7 @@ mod tests {
         let dup = vec![Constructor::new("Foo", Int), Constructor::new("None", Bool)];
         match defs.insert("Maybe", dup) {
             Ok(()) => panic!("Should not allow new sum type that reuses an existing constructor name!"),
-            Err(msg) => assert_eq!(&msg, "Ambiguous constructor: None is already defined for another type")
+            Err(msg) => assert_eq!(&msg, "Ambiguous constructor: None is already defined for type Maybe")
         }
     }
 
@@ -97,8 +102,13 @@ mod tests {
 
         let maybe_type = Sum(String::from("Maybe"));
         let bar_type = Sum(String::from("Bar"));
-        assert_eq!(defs.type_of(Constructor::new("Just", TypeVar(0))), maybe_type);
-        assert_eq!(defs.type_of(Constructor::new("Foo", Int)), bar_type);
+        assert_eq!(defs.type_of(Constructor::new("Just", TypeVar(0))), Ok(maybe_type));
+        assert_eq!(defs.type_of(Constructor::new("Foo", Int)), Ok(bar_type));
+
+        match defs.type_of(Constructor::new("Baz", Int)) {
+            Ok(_) => panic!(),
+            Err(msg) => assert_eq!(&msg, "Constructor Baz does not exist")
+        }
     }
 
     #[test]
