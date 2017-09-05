@@ -94,7 +94,7 @@ fn apply(func: Term, arg: Term, session_bindings: &[LetBinding]) -> Result<Term,
         Atom(a) => {
             match a {
                 BuiltIn(op) => Ok(App(Box::new(Atom(BuiltIn(op))), Box::new(arg))),
-                Int(_) | Bool(_) => Err(type_err)
+                Int(_) | Bool(_) | Unit => Err(type_err)
             }
         },
         App(f, g) => {

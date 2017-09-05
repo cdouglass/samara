@@ -24,6 +24,10 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut token_stack: &mut Vec<Token>, mu
 
     loop {
         let next_term_result = match tokens.peek().cloned() {
+            Some(Token::Unit) => {
+                tokens.next();
+                return Ok(Term::Atom(Atom::Unit));
+            },
             Some(Token::Open) => {
                 tokens.next();
                 token_stack.push(Token::Open);
@@ -160,6 +164,18 @@ mod tests {
     use interpret::types::Atom;
     use interpret::types::Term;
 
+    fn assert_parse(expr: &str, expected: Term) {
+        let mut ids = vec![];
+        let mut tokens = build_lexer(expr.trim());
+        match parse(&mut tokens, &mut ids) {
+            Err(msg) => {
+                println!("Expected term {:?} but got error {}", expected, msg);
+                panic!()
+            },
+            Ok(term) => assert_eq!(term, expected)
+        }
+    }
+
     fn assert_parse_err(expr: &str, msg: &str) {
         let mut ids = vec![];
         let mut tokens = build_lexer(expr.trim());
@@ -188,9 +204,13 @@ mod tests {
     }
 
     #[test]
+    fn test_parses_unit() {
+        assert_parse("()", Term::Atom(Atom::Unit));
+    }
+
+    #[test]
     fn test_empty_input() {
         assert_parse_err("", "Unexpected end of input");
-        assert_parse_err("()", "Unexpected end of input");
     }
 
     #[test]

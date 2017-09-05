@@ -9,6 +9,7 @@ pub enum Token {
     Open,
     Close,
     Lambda,
+    Unit,
     Keyword(Keyword),
     Constructor(String),
     Identifier(String),
@@ -62,8 +63,17 @@ impl<'a> Iterator for Lexer<'a> {
             // https://stackoverflow.com/questions/26920789/unable-to-borrow-an-iterator-as-mutable-more-than-once-at-a-time
             let ch = self.it.peek().cloned();
             match token {
-                Some(Token::Open) | Some(Token::Close) | Some(Token::Lambda) | Some(Token::Keyword(_)) => {
+                Some(Token::Close) | Some(Token::Lambda) | Some(Token::Unit) | Some(Token::Keyword(_)) => {
                     return token;
+                },
+                Some(Token::Open) => {
+                    match ch {
+                        Some(')') => {
+                            token = Some(Token::Unit);
+                            self.it.next();
+                        },
+                        _ => {  return token; }
+                    }
                 },
                 Some(Token::Constructor(ref mut s)) => {
                     if update_if_match(s, ch, &is_identifier, &mut self.it) {
@@ -144,8 +154,8 @@ mod tests {
 
     #[test]
     fn test_lex() {
-        let input = "(5  5 * / // +34()";
-        let expected = [Token::Open, Token::Number(String::from("5")), Token::Number(String::from("5")), Token::Operator(String::from("*")), Token::Operator(String::from("/")), Token::Operator(String::from("//")), Token::Operator(String::from("+")), Token::Number(String::from("34")), Token::Open, Token::Close];
+        let input = "(5  5 * / // +34(())";
+        let expected = [Token::Open, Token::Number(String::from("5")), Token::Number(String::from("5")), Token::Operator(String::from("*")), Token::Operator(String::from("/")), Token::Operator(String::from("//")), Token::Operator(String::from("+")), Token::Number(String::from("34")), Token::Open, Token::Unit, Token::Close];
         let actual : Vec<Token>  = build_lexer(input).collect();
         assert_eq!(actual, expected);
     }

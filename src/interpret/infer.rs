@@ -199,6 +199,7 @@ fn arrow(t1: Type, t2: Type) -> Type {
 
 fn base_type(atom: &Atom) -> Type {
     match *atom {
+        Atom::Unit => Unit,
         Atom::Bool(_) => Bool,
         Atom::Int(_) => Int,
         Atom::BuiltIn(ref op) => match *op {
@@ -255,6 +256,9 @@ mod tests {
         }
     }
 
+    fn unit() -> Term {
+        Term::Atom(Atom::Unit)
+    }
 
     fn int_to_term(n: i64) -> Term {
         Term::Atom(Atom::Int(n))
@@ -282,7 +286,7 @@ mod tests {
 
     #[test]
     fn test_infer_base_types() {
-        for &(ref term, ref typ) in [(int_to_term(5), Int), (bool_to_term(false), Bool), (op_to_term(Add), arrow(Int, arrow(Int, Int))), (op_to_term(Eql), arrow(Int, arrow(Int, Bool)))].iter() {
+        for &(ref term, ref typ) in [(int_to_term(5), Int), (bool_to_term(false), Bool), (op_to_term(Add), arrow(Int, arrow(Int, Int))), (op_to_term(Eql), arrow(Int, arrow(Int, Bool))), (unit(), Unit)].iter() {
             assert_type(term, typ);
         }
     }

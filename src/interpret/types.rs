@@ -8,6 +8,7 @@ use self::Op::*;
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub enum Atom {
+    Unit,
     BuiltIn(Op),
     Int(i64),
     Bool(bool)
@@ -49,6 +50,7 @@ pub struct LetBinding {
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub enum Type {
+    Unit,
     Bool,
     Int,
     Arrow(Box<Type>, Box<Type>),
@@ -77,6 +79,7 @@ impl Debug for Op {
 impl Debug for Atom {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
+            Atom::Unit => write!(f, "()"),
             Atom::Int(n) => write!(f, "{}", n),
             Atom::BuiltIn(ref op) => write!(f, "{:?}", op),
             Atom::Bool(b) => write!(f, "{:?}", b)
@@ -107,6 +110,7 @@ impl Debug for Term {
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
+            Type::Unit => write!(f, "()"),
             Type::Bool => write!(f, "Bool"),
             Type::Int => write!(f, "Int"),
             Type::Arrow(ref a, ref b) => write!(f, "{:?} -> {:?}", *a, *b),
