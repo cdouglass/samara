@@ -104,7 +104,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
         }
         match token {
-            Some(Token::Identifier(ref s)) | Some(Token::Operator(ref s)) => {
+            Some(Token::Identifier(ref s)) | Some(Token::Operator(ref s)) | Some(Token::Constructor(ref s)) => {
                 use self::Keyword::*;
                 use self::Token::*;
                 match s.as_ref() {
