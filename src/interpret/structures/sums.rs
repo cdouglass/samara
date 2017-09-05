@@ -90,7 +90,15 @@ mod tests {
 
     #[test]
     fn test_find_type_of_constructor() {
-        //TODO
+        let mut defs = SumTypeDefs::new();
+        defs.insert("Maybe", maybe()).unwrap();
+        let bar = vec![Constructor::new("Foo", Int), Constructor::new("Bar", Bool)];
+        defs.insert("Bar", bar).unwrap();
+
+        let maybe_type = Sum(String::from("Maybe"));
+        let bar_type = Sum(String::from("Bar"));
+        assert_eq!(defs.type_of(Constructor::new("Just", TypeVar(0))), maybe_type);
+        assert_eq!(defs.type_of(Constructor::new("Foo", Int)), bar_type);
     }
 
     #[test]
