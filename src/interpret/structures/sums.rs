@@ -5,36 +5,51 @@ use interpret::structures::Type;
 use interpret::structures::Type::*;
 
 pub struct SumTypeDefs {
-    constructors: HashMap<String, (Constructor, Type)>,
-    types: HashMap<String, String> //key: constructor name, value: type name
+    types: HashMap<String, SumType>,
+    by_constructor: HashMap<Constructor, SumType>
 }
 
 impl SumTypeDefs {
     pub fn type_of(&self, constr: Constructor) -> Result<Type, String> {
-        match self.types.get(&constr.name) {
-            Some(type_name) => Ok(Sum(type_name.clone())),
+        match self.by_constructor.get(&constr) {
+            Some(typ) => Ok(Sum(typ.name.clone())),
             None => Err(String::from(format!("Constructor {} does not exist", constr.name)))
         }
     }
 
     pub fn all_constructors(&self, typ: &str) -> Result<HashSet<(Constructor, Type)>, String> {
+        let mut constructors = HashSet::new();
         //TODO
-        Ok(HashSet::new())
+        Ok(constructors)
     }
 
-    pub fn insert(&mut self, name: &str, constructors: Vec<(Constructor, Type)>) -> Result<(), String> {
+    pub fn add_type(&mut self, name: &str, constructors: Vec<(Constructor, Type)>) -> Result<(), String> {
+        let new_typ = SumType::new(name, constructors.clone());
+        let mut new_by_constructor = HashMap::new();
+
+        for typ in self.types.values() {
+            if typ.name == name {
+                return Err(String::from(format!("Type {} already exists", name)));
+            }
+        }
+
         for (c, typ) in constructors {
             if let Ok(t) = self.type_of(c.clone()) {
                     return Err(String::from(format!("Ambiguous constructor: {} is already defined for type {}", c.name, t.name)));
             }
-            self.types.insert(c.name.clone(), String::from(name));
-            self.constructors.insert(c.name.clone(), (c, typ));
+            new_by_constructor.insert(c, new_typ.clone());
         }
+
+        for (c, typ) in new_by_constructor {
+            self.by_constructor.insert(c, typ);
+        }
+        self.types.insert(String::from(name), new_typ);
+
         Ok(())
     }
 
     pub fn new() -> SumTypeDefs {
-        SumTypeDefs{constructors: HashMap::new(), types: HashMap::new()}
+        SumTypeDefs{by_constructor: HashMap::new(), types: HashMap::new()}
     }
 }
 
@@ -50,6 +65,19 @@ pub struct Constructor {
 impl Constructor {
     pub fn new(name: &str) -> Constructor {
         Constructor{name: String::from(name)}
+    }
+}
+
+#[derive(Clone)]
+pub struct SumType {
+    pub name: String,
+    pub variants: HashSet<(Constructor, Type)>
+}
+
+impl SumType {
+    pub fn new(name: &str, constructors: Vec<(Constructor, Type)>) -> SumType {
+        let variants = constructors.iter().cloned().collect();
+        SumType{name: String::from(name), variants: variants}
     }
 }
 
@@ -71,7 +99,7 @@ mod tests {
     #[test]
     fn test_insert_valid_type() {
         let mut defs = SumTypeDefs::new();
-        match defs.insert("Maybe", maybe()) {
+        match defs.add_type("Maybe", maybe()) {
             Err(msg) => {
                 println!("Error: {}", msg);
                 panic!()
@@ -83,9 +111,9 @@ mod tests {
     #[test]
     fn test_constructor_names_must_be_unique() {
         let mut defs = SumTypeDefs::new();
-        defs.insert("Maybe", maybe()).unwrap();
+        defs.add_type("Maybe", maybe()).unwrap();
         let dup = vec![(Constructor::new("Foo"), Int), (Constructor::new("None"), Bool)];
-        match defs.insert("Maybe", dup) {
+        match defs.add_type("Maybe", dup) {
             Ok(()) => panic!("Should not allow new sum type that reuses an existing constructor name!"),
             Err(msg) => assert_eq!(&msg, "Ambiguous constructor: None is already defined for type Maybe")
         }
@@ -94,8 +122,8 @@ mod tests {
     #[test]
     fn test_find_type_of_constructor() {
         let mut defs = SumTypeDefs::new();
-        defs.insert("Maybe", maybe()).unwrap();
-        defs.insert("Bar", bar()).unwrap();
+        defs.add_type("Maybe", maybe()).unwrap();
+        defs.add_type("Bar", bar()).unwrap();
 
         let maybe_type = Sum(String::from("Maybe"));
         let bar_type = Sum(String::from("Bar"));
@@ -111,8 +139,8 @@ mod tests {
     #[test]
     fn test_get_all_constructors_for_type() {
         let mut defs = SumTypeDefs::new();
-        defs.insert("Maybe", maybe()).unwrap();
-        defs.insert("Bar", bar()).unwrap();
+        defs.add_type("Maybe", maybe()).unwrap();
+        defs.add_type("Bar", bar()).unwrap();
 
         let mut expected = HashSet::new();
         expected.insert((Constructor::new("Just"), TypeVar(0)));
@@ -127,9 +155,3 @@ mod tests {
         assert_eq!(Err(String::from("No type Invalid")), defs.all_constructors("Invalid"));
     }
 }
-
-/*
- Next:
- - test_get_all_constructors_for_type
- - don't include contained type inside Constructor structure
- */
