@@ -1,5 +1,6 @@
 mod lex;
 use self::lex::build_lexer;
+use self::lex::TokenStream;
 
 mod structures;
 use self::structures::Atom::*;
@@ -31,9 +32,11 @@ pub fn type_of(expr: &str, bindings: &[LetBinding], mut gen: &mut GenTypeVar) ->
 }
 
 fn parse_from_str(expr: &str, bindings: &[LetBinding]) -> Result<Term, String> {
-    let mut tokens = build_lexer(expr.trim());
     let mut identifiers: Vec<String> = bindings.into_iter().map(|x| x.name.clone()).collect();
-    parse(&mut tokens, &mut identifiers)
+    match build_lexer(expr.trim()) {
+        TokenStream::Expr(mut tokens) => parse(&mut tokens, &mut identifiers),
+        _ => panic!()
+    }
 }
 
 pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar) -> Result<Term, String> {
@@ -224,7 +227,12 @@ fn unshift_indices(term: Term, cutoff: usize) -> Term {
 
 
 fn fix(name: String, value: Term) -> Term {
-    let mut fix_toks = build_lexer("(\\f -> (\\x -> f (\\y -> x x y)) (\\x -> f (\\y -> x x y)))");
-    let y = parse(&mut fix_toks, &mut vec![]).unwrap();
-    App(Box::new(y), Box::new(Lambda(Box::new(value), name)))
+    let expr = "(\\f -> (\\x -> f (\\y -> x x y)) (\\x -> f (\\y -> x x y)))";
+    match build_lexer(expr) {
+        TokenStream::Expr(mut fix_toks) => {
+            let y = parse(&mut fix_toks, &mut vec![]).unwrap();
+            App(Box::new(y), Box::new(Lambda(Box::new(value), name)))
+        },
+        _ => panic!()
+    }
 }

@@ -2,9 +2,9 @@ use std::iter::Iterator;
 use std::iter::Peekable;
 use std::str::FromStr;
 
-use interpret::lex::TokenStream;
-use interpret::lex::Token;
-use interpret::lex::Keyword::*;
+use interpret::lex::expr::TokenStream;
+use interpret::lex::expr::Token;
+use interpret::lex::expr::Keyword::*;
 
 use interpret::structures::Atom;
 use interpret::structures::Op;
@@ -161,12 +161,17 @@ fn parse_let(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
 mod tests {
     use super::parse;
     use interpret::lex::build_lexer;
+    use interpret::lex::TokenStream as TS;
+    use interpret::lex::expr::TokenStream;
     use interpret::structures::Atom;
     use interpret::structures::Term;
 
     fn assert_parse(expr: &str, expected: Term) {
         let mut ids = vec![];
-        let mut tokens = build_lexer(expr.trim());
+        let mut tokens = match build_lexer(expr) {
+            TS::Expr(ts) => ts,
+            _ => panic!()
+        };
         match parse(&mut tokens, &mut ids) {
             Err(msg) => {
                 println!("Expected term {:?} but got error {}", expected, msg);
@@ -178,7 +183,10 @@ mod tests {
 
     fn assert_parse_err(expr: &str, msg: &str) {
         let mut ids = vec![];
-        let mut tokens = build_lexer(expr.trim());
+        let mut tokens = match build_lexer(expr) {
+            TS::Expr(ts) => ts,
+            _ => panic!()
+        };
         match parse(&mut tokens, &mut ids) {
             Err(m) => assert_eq!(m, msg),
             Ok(term) => {
@@ -190,7 +198,11 @@ mod tests {
 
     #[test]
     fn test_parses_lambda_application() {
-        let ast = parse(&mut build_lexer("(\\x -> (\\y -> 3)) 2"), &mut vec![]);
+        let mut token_stream = match build_lexer("(\\x -> (\\y -> 3)) 2") {
+            TS::Expr(ts) => ts,
+            _ => panic!()
+        };
+        let ast = parse(&mut token_stream, &mut vec![]);
         let expected =
             Term::App(
                 Box::new(Term::Lambda(
