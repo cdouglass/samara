@@ -17,9 +17,9 @@ impl SumTypeDefs {
         }
     }
 
-    pub fn all_constructors(&self, typ: Type) -> HashSet<(Constructor, Type)> {
+    pub fn all_constructors(&self, typ: &str) -> Result<HashSet<(Constructor, Type)>, String> {
         //TODO
-        HashSet::new()
+        Ok(HashSet::new())
     }
 
     pub fn insert(&mut self, name: &str, constructors: Vec<(Constructor, Type)>) -> Result<(), String> {
@@ -62,6 +62,10 @@ mod tests {
         vec![(Constructor::new("Just"), TypeVar(0)), (Constructor::new("None"), Unit)]
     }
 
+    fn bar() -> Vec<(Constructor, Type)> {
+        vec![(Constructor::new("Foo"), Int), (Constructor::new("Bar"), Bool)]
+    }
+
     /* Tests */
 
     #[test]
@@ -91,8 +95,7 @@ mod tests {
     fn test_find_type_of_constructor() {
         let mut defs = SumTypeDefs::new();
         defs.insert("Maybe", maybe()).unwrap();
-        let bar = vec![(Constructor::new("Foo"), Int), (Constructor::new("Bar"), Bool)];
-        defs.insert("Bar", bar).unwrap();
+        defs.insert("Bar", bar()).unwrap();
 
         let maybe_type = Sum(String::from("Maybe"));
         let bar_type = Sum(String::from("Bar"));
@@ -107,6 +110,26 @@ mod tests {
 
     #[test]
     fn test_get_all_constructors_for_type() {
-        //TODO
+        let mut defs = SumTypeDefs::new();
+        defs.insert("Maybe", maybe()).unwrap();
+        defs.insert("Bar", bar()).unwrap();
+
+        let mut expected = HashSet::new();
+        expected.insert((Constructor::new("Just"), TypeVar(0)));
+        expected.insert((Constructor::new("None"), Unit));
+        assert_eq!(Ok(expected), defs.all_constructors("Maybe"));
+
+        let mut expected = HashSet::new();
+        expected.insert((Constructor::new("Foo"), Int));
+        expected.insert((Constructor::new("Bar"), Bool));
+        assert_eq!(Ok(expected), defs.all_constructors("Baz"));
+
+        assert_eq!(Err(String::from("No type Invalid")), defs.all_constructors("Invalid"));
     }
 }
+
+/*
+ Next:
+ - test_get_all_constructors_for_type
+ - don't include contained type inside Constructor structure
+ */
