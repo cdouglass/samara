@@ -75,11 +75,7 @@ impl<'a> Iterator for Lexer<'a> {
                         _ => {  return token; }
                     }
                 },
-                Some(Token::Constructor(ref mut s)) => {
-                    if update_if_match(s, ch, &is_identifier, &mut self.it) {
-                    } else { break; }
-                },
-                Some(Token::Identifier(ref mut s)) => {
+                Some(Token::Constructor(ref mut s)) | Some(Token::Identifier(ref mut s)) => {
                     if update_if_match(s, ch, &is_identifier, &mut self.it) {
                     } else { break; }
                 },

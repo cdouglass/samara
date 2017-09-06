@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use interpret::structures::Type;
 use interpret::structures::Type::*;
 
+#[derive(Debug)]
 pub struct SumTypeDefs {
     types: HashMap<String, SumType>,
     by_constructor: HashMap<Constructor, SumType>
@@ -19,7 +20,7 @@ impl SumTypeDefs {
 
     pub fn all_constructors(&self, type_name: &str) -> Result<HashSet<(Constructor, Type)>, String> {
         match self.types.get(type_name) {
-            Some(ref typ) => { Ok(typ.variants.clone()) },
+            Some(typ) => { Ok(typ.variants.clone()) },
             None => Err(String::from(format!("Type {} does not exist", type_name)))
         }
     }
@@ -69,6 +70,7 @@ impl Constructor {
     }
 }
 
+#[derive(Debug)]
 #[derive(Clone)]
 pub struct SumType {
     pub name: String,
@@ -141,18 +143,18 @@ mod tests {
     fn test_get_all_constructors_for_type() {
         let mut defs = SumTypeDefs::new();
         defs.add_type("Maybe", maybe()).unwrap();
-        defs.add_type("Bar", bar()).unwrap();
+        defs.add_type("Baz", bar()).unwrap();
 
         let mut expected = HashSet::new();
         expected.insert((Constructor::new("Just"), TypeVar(0)));
         expected.insert((Constructor::new("None"), Unit));
-        assert_eq!(Ok(expected), defs.all_constructors("Maybe"));
+        assert_eq!(defs.all_constructors("Maybe"), Ok(expected));
 
         let mut expected = HashSet::new();
         expected.insert((Constructor::new("Foo"), Int));
         expected.insert((Constructor::new("Bar"), Bool));
-        assert_eq!(Ok(expected), defs.all_constructors("Baz"));
+        assert_eq!(defs.all_constructors("Baz"), Ok(expected));
 
-        assert_eq!(Err(String::from("No type Invalid")), defs.all_constructors("Invalid"));
+        assert_eq!(Err(String::from("Type Invalid does not exist")), defs.all_constructors("Invalid"));
     }
 }
