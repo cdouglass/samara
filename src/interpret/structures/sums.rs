@@ -17,10 +17,11 @@ impl SumTypeDefs {
         }
     }
 
-    pub fn all_constructors(&self, typ: &str) -> Result<HashSet<(Constructor, Type)>, String> {
-        let mut constructors = HashSet::new();
-        //TODO
-        Ok(constructors)
+    pub fn all_constructors(&self, type_name: &str) -> Result<HashSet<(Constructor, Type)>, String> {
+        match self.types.get(type_name) {
+            Some(ref typ) => { Ok(typ.variants.clone()) },
+            None => Err(String::from(format!("Type {} does not exist", type_name)))
+        }
     }
 
     pub fn add_type(&mut self, name: &str, constructors: Vec<(Constructor, Type)>) -> Result<(), String> {
@@ -40,10 +41,10 @@ impl SumTypeDefs {
             new_by_constructor.insert(c, new_typ.clone());
         }
 
+        self.types.insert(String::from(name), new_typ);
         for (c, typ) in new_by_constructor {
             self.by_constructor.insert(c, typ);
         }
-        self.types.insert(String::from(name), new_typ);
 
         Ok(())
     }
@@ -113,7 +114,7 @@ mod tests {
         let mut defs = SumTypeDefs::new();
         defs.add_type("Maybe", maybe()).unwrap();
         let dup = vec![(Constructor::new("Foo"), Int), (Constructor::new("None"), Bool)];
-        match defs.add_type("Maybe", dup) {
+        match defs.add_type("Foo", dup) {
             Ok(()) => panic!("Should not allow new sum type that reuses an existing constructor name!"),
             Err(msg) => assert_eq!(&msg, "Ambiguous constructor: None is already defined for type Maybe")
         }
