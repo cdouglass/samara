@@ -32,21 +32,19 @@ pub enum Keyword {
     False
 }
 
-pub struct Lexer<'a> {
+pub struct TokenStream<'a> {
     it: Peekable<Chars<'a>>
 }
 
-pub fn build_lexer(expr: &str) -> Peekable<Lexer> {
-    Lexer {
+pub fn build_lexer(expr: &str) -> Peekable<TokenStream> {
+    TokenStream {
         it: expr.chars().peekable(),
     }.peekable()
 }
 
-impl<'a> Iterator for Lexer<'a> {
+impl<'a> Iterator for TokenStream<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Token> {
-        let mut token = None;
-
         fn is_operator(c: char) -> bool {
             match c {
                 '+'|'-'|'*'|'/'|'^'|'%'|'<'|'>'|'=' => true,
@@ -57,6 +55,8 @@ impl<'a> Iterator for Lexer<'a> {
         fn is_identifier(c: char) -> bool {
             c.is_alphabetic() || c == '_'
         }
+
+        let mut token = None;
 
         loop {
             // map to prevent borrow of self.it

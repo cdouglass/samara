@@ -2,7 +2,7 @@ use std::iter::Iterator;
 use std::iter::Peekable;
 use std::str::FromStr;
 
-use interpret::lex::Lexer;
+use interpret::lex::TokenStream;
 use interpret::lex::Token;
 use interpret::lex::Keyword::*;
 
@@ -10,12 +10,12 @@ use interpret::structures::Atom;
 use interpret::structures::Op;
 use interpret::structures::Term;
 
-pub fn parse(mut tokens: &mut Peekable<Lexer>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
+pub fn parse(mut tokens: &mut Peekable<TokenStream>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
     let mut token_stack = vec![];
     parse_term(&mut tokens, &mut token_stack, &mut identifier_stack)
 }
 
-fn parse_term(tokens: &mut Peekable<Lexer>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
+fn parse_term(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
     let close_err = Err(String::from("Unexpected CLOSE delimiter"));
     let end_of_input_err = Err(String::from("Unexpected end of input"));
     let syntax_err = Err(String::from("Syntax error"));
@@ -122,7 +122,7 @@ fn parse_term(tokens: &mut Peekable<Lexer>, mut token_stack: &mut Vec<Token>, mu
     }
 }
 
-fn parse_conditional(tokens: &mut Peekable<Lexer>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
+fn parse_conditional(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
     token_stack.push(Token::Keyword(Then));
     let predicate = parse_term(tokens, token_stack, identifier_stack);
 
@@ -136,7 +136,7 @@ fn parse_conditional(tokens: &mut Peekable<Lexer>, mut token_stack: &mut Vec<Tok
     }
 }
 
-fn parse_let(tokens: &mut Peekable<Lexer>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
+fn parse_let(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
     let syntax_err = Err(String::from("Syntax error"));
 
     match (tokens.next(), tokens.next()) {
