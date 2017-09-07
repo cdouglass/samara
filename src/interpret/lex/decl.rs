@@ -18,6 +18,8 @@ pub enum Token {
     Var(String)
 }
 
+use self::Token::*;
+
 pub struct TokenStream<'a> {
     it: Peekable<Chars<'a>>
 }
@@ -41,7 +43,7 @@ impl<'a> Iterator for TokenStream<'a> {
             let ch = self.it.peek().cloned();
             match token {
                 Some(Token::Close) | Some(Token::Separator) | Some(Token::Eql) | Some(Token::Arrow) | Some(Token::Bool) | Some(Token::Int) | Some(Token::Unit) => {
-                    return token;
+                    break;
                 },
                 Some(Token::Open) => {
                     match ch {
@@ -65,6 +67,8 @@ impl<'a> Iterator for TokenStream<'a> {
                     match ch {
                         Some('(')  => { token = Some(Token::Open) },
                         Some(')')  => { token = Some(Token::Close) },
+                        Some('=')  => { token = Some(Token::Eql) },
+                        Some('|')  => { token = Some(Token::Separator) },
                         Some('-') => {
                             self.it.next();
                             if let Some(&'>') = self.it.peek() {
@@ -85,13 +89,45 @@ impl<'a> Iterator for TokenStream<'a> {
                 }
             }
         }
+        if let Some(Token::Sum(ref s)) = token {
+            if s == "Bool" {
+                return Some(Token::Bool);
+            } else if s == "Int" {
+                return Some(Token::Int);
+            } else if s == "Unit" {
+                return Some(Token::Unit);
+            }
+        }
         token
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super;
-    //use self::decl::Token::*;
-    //TODO
+    use super::build_lexer;
+    use super::Token;
+    use super::Token::*;
+
+
+    /* Helpers */
+    fn assert_tokens(decl: &str, expected: Vec<Token>) {
+        let tokens : Vec<Token> = build_lexer(decl).collect();
+        assert_eq!(tokens, expected);
+    }
+
+    /* Tests */
+
+    #[test]
+    fn test_individual_tokens() {
+        assert_tokens("(", vec![Open]);
+        assert_tokens(")", vec![Close]);
+        assert_tokens("|", vec![Separator]);
+        assert_tokens("=", vec![Eql]);
+        assert_tokens("->", vec![Arrow]);
+        assert_tokens("Bool", vec![Bool]);
+        assert_tokens("Int", vec![Int]);
+        assert_tokens("Unit", vec![Unit]);
+        assert_tokens("Foo", vec![Sum(String::from("Foo"))]);
+        assert_tokens("foo", vec![Var(String::from("foo"))]);
+    }
 }
