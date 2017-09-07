@@ -91,5 +91,7 @@ impl<'a> Iterator for TokenStream<'a> {
 
 #[cfg(test)]
 mod tests {
+    use super;
+    //use self::decl::Token::*;
     //TODO
 }
