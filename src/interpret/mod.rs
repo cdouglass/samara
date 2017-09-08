@@ -11,7 +11,7 @@ use self::structures::Term::*;
 use self::structures::Type;
 
 mod parse;
-use self::parse::parse;
+use self::parse::parse_expr;
 
 pub mod infer;
 use self::infer::infer_type;
@@ -34,7 +34,7 @@ pub fn type_of(expr: &str, bindings: &[LetBinding], mut gen: &mut GenTypeVar) ->
 fn parse_from_str(expr: &str, bindings: &[LetBinding]) -> Result<Term, String> {
     let mut identifiers: Vec<String> = bindings.into_iter().map(|x| x.name.clone()).collect();
     match build_lexer(expr.trim()) {
-        TokenStream::Expr(mut tokens) => parse(&mut tokens, &mut identifiers),
+        TokenStream::Expr(mut tokens) => parse_expr(&mut tokens, &mut identifiers),
         _ => panic!()
     }
 }
@@ -230,7 +230,7 @@ fn fix(name: String, value: Term) -> Term {
     let expr = "(\\f -> (\\x -> f (\\y -> x x y)) (\\x -> f (\\y -> x x y)))";
     match build_lexer(expr) {
         TokenStream::Expr(mut fix_toks) => {
-            let y = parse(&mut fix_toks, &mut vec![]).unwrap();
+            let y = parse_expr(&mut fix_toks, &mut vec![]).unwrap();
             App(Box::new(y), Box::new(Lambda(Box::new(value), name)))
         },
         _ => panic!()

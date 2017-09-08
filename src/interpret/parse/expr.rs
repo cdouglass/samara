@@ -10,12 +10,7 @@ use interpret::structures::Atom;
 use interpret::structures::Op;
 use interpret::structures::Term;
 
-pub fn parse(mut tokens: &mut Peekable<TokenStream>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
-    let mut token_stack = vec![];
-    parse_term(&mut tokens, &mut token_stack, &mut identifier_stack)
-}
-
-fn parse_term(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
+pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
     let close_err = Err(String::from("Unexpected CLOSE delimiter"));
     let end_of_input_err = Err(String::from("Unexpected end of input"));
     let syntax_err = Err(String::from("Syntax error"));
@@ -31,7 +26,7 @@ fn parse_term(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
             Some(Token::Open) => {
                 tokens.next();
                 token_stack.push(Token::Open);
-                parse_term(tokens, &mut token_stack, &mut identifier_stack)
+                parse(tokens, &mut token_stack, &mut identifier_stack)
             },
             Some(Token::Close) => {
                 match token_stack.last() {
@@ -50,7 +45,7 @@ fn parse_term(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
                     (Some(Token::Identifier(s)), Some(Token::Keyword(Arrow))) => {
                         identifier_stack.push(s.clone());
                         token_stack.push(Token::Keyword(Arrow));
-                        let body = parse_term(tokens, &mut token_stack, &mut identifier_stack);
+                        let body = parse(tokens, &mut token_stack, &mut identifier_stack);
                         identifier_stack.pop();
                         let result = body.map(|b| Term::Lambda(Box::new(b), s));
                         match token_stack.pop() {
@@ -124,12 +119,12 @@ fn parse_term(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
 
 fn parse_conditional(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
     token_stack.push(Token::Keyword(Then));
-    let predicate = parse_term(tokens, token_stack, identifier_stack);
+    let predicate = parse(tokens, token_stack, identifier_stack);
 
     token_stack.push(Token::Keyword(Else));
-    let true_case = parse_term(tokens, token_stack, identifier_stack);
+    let true_case = parse(tokens, token_stack, identifier_stack);
 
-    let false_case = parse_term(tokens, token_stack, identifier_stack);
+    let false_case = parse(tokens, token_stack, identifier_stack);
     match (predicate, true_case, false_case) {
         (Ok(p), Ok(t), Ok(f)) => Ok(Term::Conditional(Box::new(p), Box::new(t), Box::new(f))),
         (Err(msg), _, _) | (_, Err(msg), _) | (_, _, Err(msg)) => Err(msg)
@@ -143,12 +138,12 @@ fn parse_let(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
         (Some(Token::Identifier(s)), Some(Token::Keyword(Assign))) => {
             identifier_stack.push(s.clone());
             token_stack.push(Token::Keyword(In));
-            let value = parse_term(tokens, &mut token_stack, &mut identifier_stack)?;
+            let value = parse(tokens, &mut token_stack, &mut identifier_stack)?;
 
             if *token_stack == vec![Token::Keyword(In)] {
                 Ok(Term::Let(s, Box::new(value), None))
             } else {
-                let body = Some(parse_term(tokens, &mut token_stack, &mut identifier_stack)?);
+                let body = Some(parse(tokens, &mut token_stack, &mut identifier_stack)?);
                 identifier_stack.pop();
                 Ok(Term::Let(s, Box::new(value), body.map(Box::new)))
             }
