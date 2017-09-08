@@ -10,10 +10,7 @@ use interpret::structures::Type;
 mod decl;
 mod expr;
 
-pub fn parse_decl(mut tokens: &mut Peekable<DTokenStream>, mut gen: &mut GenTypeVar) -> Result<Type, String> {
-    let mut token_stack = vec![];
-    decl::parse(tokens, &mut token_stack, &mut gen)
-}
+pub use self::decl::parse as parse_decl;
 
 pub fn parse_expr(mut tokens: &mut Peekable<ETokenStream>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
     let mut token_stack = vec![];

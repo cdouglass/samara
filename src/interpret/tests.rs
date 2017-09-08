@@ -29,31 +29,27 @@ fn assert_evaluates_to_atom(expr: &str, mut bindings: &mut Vec<LetBinding>, mut 
     }
 }
 
-fn make_gen() -> GenTypeVar {
-    GenTypeVar{n: 0}
-}
-
 #[test]
 fn test_too_many_arguments() {
-    assert_evaluation_err("(* 1 2 3)", &mut vec![], &mut make_gen(), "Type error: Int -> t6 != Int");
+    assert_evaluation_err("(* 1 2 3)", &mut vec![], &mut GenTypeVar::new(), "Type error: Int -> t6 != Int");
 }
 
 /* Evaluating valid input */
 
 #[test]
 fn test_evaluate_int() {
-    assert_evaluates_to_atom("42", &mut vec![], &mut make_gen(), Atom::Int(42));
+    assert_evaluates_to_atom("42", &mut vec![], &mut GenTypeVar::new(), Atom::Int(42));
 }
 
 #[test]
 fn test_evaluate_op() {
-    assert_evaluates_to_atom("+", &mut vec![], &mut make_gen(), Atom::BuiltIn(Op::Add));
-    assert_evaluates_to_atom("//", &mut vec![], &mut make_gen(), Atom::BuiltIn(Op::Div));
+    assert_evaluates_to_atom("+", &mut vec![], &mut GenTypeVar::new(), Atom::BuiltIn(Op::Add));
+    assert_evaluates_to_atom("//", &mut vec![], &mut GenTypeVar::new(), Atom::BuiltIn(Op::Div));
 }
 
 #[test]
 fn test_partially_apply_op() {
-    let mut gen = GenTypeVar{n: 0};
+    let mut gen = GenTypeVar::new();
     let result = evaluate("(% 10)", &mut vec![], &mut gen).unwrap();
     match result {
         Term::App(a, b) => {
@@ -72,7 +68,7 @@ Requires recursive types
 #[test]
 fn test_anonymous_factorial() {
     let expr = "((\\f -> (\\x -> f (\\y -> x x y)) (\\x -> f (\\y -> x x y))) (\\fct -> (\\n -> if (< n 2) then 1 else (* n (fct (- n 1)))))) 8";
-    assert_evaluates_to_atom(expr, &mut vec![], &mut make_gen(), Atom::Int(40320));
+    assert_evaluates_to_atom(expr, &mut vec![], &mut GenTypeVar::new(), Atom::Int(40320));
 }
 
 */
@@ -80,12 +76,12 @@ fn test_anonymous_factorial() {
 #[test]
 fn test_factorial_with_let() {
     let expr = "let fact = (\\n -> if (< n 2) then 1 else (* n (fact (- n 1)))) in fact 8";
-    assert_evaluates_to_atom(expr, &mut vec![], &mut make_gen(), Atom::Int(40320));
+    assert_evaluates_to_atom(expr, &mut vec![], &mut GenTypeVar::new(), Atom::Int(40320));
 }
 
 #[test]
 fn test_polymorphic_let() {
-    let mut gen = make_gen();
+    let mut gen = GenTypeVar::new();
     assert_evaluates_to_atom("let id = (\\x -> x) in (if id True then id 5 else id 10)", &mut vec![], &mut gen, Atom::Int(5));
 
     assert_evaluates_to_atom(
@@ -101,7 +97,7 @@ fn test_polymorphic_let() {
 #[test]
 fn test_polymorphic_session_let() {
     let mut bindings = vec![];
-    let mut gen = make_gen();
+    let mut gen = GenTypeVar::new();
     evaluate("let id = (\\x -> x)", &mut bindings, &mut gen).unwrap();
 
     assert_evaluates_to_atom("id 5", &mut bindings, &mut gen, Atom::Int(5));
@@ -117,12 +113,12 @@ fn test_polymorphic_session_let() {
 
 #[test]
 fn test_fully_apply_op() {
-    assert_evaluates_to_atom("(// 12 3)", &mut vec![], &mut make_gen(), Atom::Int(4));
+    assert_evaluates_to_atom("(// 12 3)", &mut vec![], &mut GenTypeVar::new(), Atom::Int(4));
 }
 
 #[test]
 fn test_missing_outer_parens() {
-    assert_evaluates_to_atom("+ 10 10", &mut vec![], &mut make_gen(), Atom::Int(20));
+    assert_evaluates_to_atom("+ 10 10", &mut vec![], &mut GenTypeVar::new(), Atom::Int(20));
 }
 
 #[test]
@@ -130,7 +126,7 @@ fn test_save_session_bindings() {
     let expected = Ok(Term::Atom(Atom::Int(50)));
 
     let mut bindings = vec![];
-    let mut gen = make_gen();
+    let mut gen = GenTypeVar::new();
     evaluate("let x = (* 5 10)", &mut bindings, &mut gen).unwrap();
 
     let reuse = evaluate("x", &mut bindings, &mut gen);
@@ -140,15 +136,15 @@ fn test_save_session_bindings() {
 #[test]
 fn test_recursive_session_bindings() {
     let mut bindings = vec![];
-    let mut gen = make_gen();
+    let mut gen = GenTypeVar::new();
     evaluate("let fact = (\\n -> if (< n 2) then 1 else (* n (fact (- n 1))))", &mut bindings, &mut gen).unwrap();
-    assert_evaluates_to_atom("fact 8", &mut bindings, &mut make_gen(), Atom::Int(40320));
+    assert_evaluates_to_atom("fact 8", &mut bindings, &mut GenTypeVar::new(), Atom::Int(40320));
 }
 
 #[test]
 fn test_type_of_using_session_bindings() {
     let mut bindings = vec![];
-    let mut gen = make_gen();
+    let mut gen = GenTypeVar::new();
     evaluate("let x = (* 5 10)", &mut bindings, &mut gen).unwrap();
     let typ = type_of("x", &bindings, &mut gen).1.unwrap();
     assert_eq!(typ, Type::Int);

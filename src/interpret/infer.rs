@@ -178,6 +178,12 @@ impl Iterator for GenTypeVar {
     }
 }
 
+impl GenTypeVar {
+    pub fn new() -> GenTypeVar {
+        GenTypeVar{n: 0}
+    }
+}
+
 fn type_vars_free_in(typ: &Type) -> HashSet<usize> {
     let mut tvars = HashSet::new();
     match *typ {
@@ -234,7 +240,7 @@ mod tests {
 
     fn assert_type(expr: &Term, t: &Type) {
         let bindings = vec![];
-        let mut gen = GenTypeVar{n: 0};
+        let mut gen = GenTypeVar::new();
         match infer_type(expr, &bindings, &mut gen) {
             Ok(t1) => assert_eq!(t1, *t),
             Err(msg) => {
@@ -246,7 +252,7 @@ mod tests {
 
     fn assert_type_err(expr: &Term, s: &str) {
         let bindings = vec![];
-        let mut gen = GenTypeVar{n: 0};
+        let mut gen = GenTypeVar::new();
         match infer_type(expr, &bindings, &mut gen) {
             Err(msg) => assert_eq!(&msg, s),
             Ok(t) => {
@@ -372,7 +378,7 @@ mod tests {
     #[test]
     fn test_fresh_instantiation() {
         let mut bindings = vec![];
-        let mut gen = GenTypeVar{n: 0};
+        let mut gen = GenTypeVar::new();
         evaluate("let id = (\\x -> x)", &mut bindings, &mut gen).unwrap();
         let x = Term::Var(0, String::new());
         assert_type_with_context(&x, &arrow(TypeVar(3), TypeVar(3)), &bindings, &mut gen);

@@ -39,7 +39,7 @@ fn main() {
     use interpret::infer::GenTypeVar;
     println!("{}", GREETING);
     let mut bindings = vec![];
-    let mut gen_type_var = GenTypeVar{n: 0};
+    let mut gen_type_var = GenTypeVar::new();
 
     loop {
         print!("{}", PROMPT);

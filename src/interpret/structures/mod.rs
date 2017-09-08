@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
-mod sums;
+pub mod sums;
 
 use self::Op::*;
 

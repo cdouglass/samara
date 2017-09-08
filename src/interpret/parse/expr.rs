@@ -162,12 +162,13 @@ mod tests {
     use interpret::structures::Term;
 
     fn assert_parse(expr: &str, expected: Term) {
+        let mut token_stack = vec![];
         let mut ids = vec![];
         let mut tokens = match build_lexer(expr) {
             TS::Expr(ts) => ts,
             _ => panic!()
         };
-        match parse(&mut tokens, &mut ids) {
+        match parse(&mut tokens, &mut token_stack, &mut ids) {
             Err(msg) => {
                 println!("Expected term {:?} but got error {}", expected, msg);
                 panic!()
@@ -177,12 +178,13 @@ mod tests {
     }
 
     fn assert_parse_err(expr: &str, msg: &str) {
+        let mut token_stack = vec![];
         let mut ids = vec![];
         let mut tokens = match build_lexer(expr) {
             TS::Expr(ts) => ts,
             _ => panic!()
         };
-        match parse(&mut tokens, &mut ids) {
+        match parse(&mut tokens, &mut token_stack, &mut ids) {
             Err(m) => assert_eq!(m, msg),
             Ok(term) => {
                 println!("Expected parse error {} but got success {:?}", msg, term);
@@ -197,7 +199,7 @@ mod tests {
             TS::Expr(ts) => ts,
             _ => panic!()
         };
-        let ast = parse(&mut token_stream, &mut vec![]);
+        let ast = parse(&mut token_stream, &mut vec![], &mut vec![]);
         let expected =
             Term::App(
                 Box::new(Term::Lambda(
