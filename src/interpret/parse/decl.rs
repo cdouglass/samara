@@ -33,7 +33,7 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar) -> Re
     loop {
         let variant = parse_variant(tokens, &type_vars)?;
         variants.insert(variant);
-        if let None = tokens.peek() { break; }
+        if tokens.peek().is_none() { break; }
     }
 
     let mut universals = HashSet::new();
@@ -89,7 +89,6 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
                     }
                 }
             },
-            Some(Token::Separator) => { break; },
             Some(Token::Eql) => {
                 return Err(String::from("Unexpected token = in right-hand side of type declaration"));
             },
@@ -126,7 +125,7 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
                     }
                 }
             },
-            None => { break; },
+            Some(Token::Separator) | None => { break; },
         }
     }
 

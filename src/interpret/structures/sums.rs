@@ -21,7 +21,7 @@ impl SumTypeDefs {
 
     pub fn all_constructors(&self, type_name: &str) -> Result<HashSet<(Constructor, Type)>, String> {
         match self.types.get(type_name) {
-            Some(ref typ) => {
+            Some(typ) => {
                 let vs: Iter<(Constructor, Type)> = typ.variants.iter();
                 let variants: HashSet<(Constructor, Type)> = vs.cloned().collect();
                 Ok(variants)
@@ -84,8 +84,8 @@ impl Constructor {
 // TODO redo this completely more efficiently
 pub struct SumType {
     pub name: String,
-    pub universals: Box<Vec<usize>>,
-    pub variants: Box<Vec<(Constructor, Type)>>
+    pub universals: Vec<usize>,
+    pub variants: Vec<(Constructor, Type)>
 }
 
 impl SumType {
@@ -93,7 +93,7 @@ impl SumType {
         let mut ctor_vec: Vec<(Constructor, Type)> = constructors.iter().cloned().collect();
         let univ_vec: Vec<usize> = universals.iter().cloned().collect();
         ctor_vec.sort_by_key(|x| x.0.name.clone());
-        SumType{name: String::from(name), variants: Box::new(ctor_vec), universals: Box::new(univ_vec)}
+        SumType{name: String::from(name), variants: ctor_vec, universals: univ_vec}
     }
 
     pub fn universals(&self) -> HashSet<usize> {
