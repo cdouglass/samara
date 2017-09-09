@@ -68,7 +68,7 @@ pub enum Type {
     Arrow(Box<Type>, Box<Type>),
     TypeVar(usize),
     //TODO
-    Sum(String)
+    Sum(sums::SumType)
 }
 
 impl Debug for Op {
@@ -128,7 +128,7 @@ impl Debug for Type {
             Type::Arrow(ref a, ref b) => write!(f, "{:?} -> {:?}", *a, *b),
             Type::TypeVar(n) => write!(f, "t{:?}", n),
             //TODO
-            Type::Sum(ref s) => write!(f, "{}", s)
+            Type::Sum(ref s) => write!(f, "{:?}", s)
         }
     }
 }

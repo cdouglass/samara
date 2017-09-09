@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::slice::Iter;
 
 use interpret::structures::Type;
 use interpret::structures::Type::*;
@@ -11,21 +12,25 @@ pub struct SumTypeDefs {
 }
 
 impl SumTypeDefs {
-    pub fn type_of(&self, constr: Constructor) -> Result<Type, String> {
+    pub fn type_of(&self, constr: Constructor) -> Result<SumType, String> {
         match self.by_constructor.get(&constr) {
-            Some(typ) => Ok(Sum(typ.name.clone())),
+            Some(typ) => Ok(typ.clone()),
             None => Err(String::from(format!("Constructor {} does not exist", constr.name)))
         }
     }
 
     pub fn all_constructors(&self, type_name: &str) -> Result<HashSet<(Constructor, Type)>, String> {
         match self.types.get(type_name) {
-            Some(typ) => { Ok(typ.variants.clone()) },
+            Some(ref typ) => {
+                let vs: Iter<(Constructor, Type)> = typ.variants.iter();
+                let variants: HashSet<(Constructor, Type)> = vs.cloned().collect();
+                Ok(variants)
+            },
             None => Err(String::from(format!("Type {} does not exist", type_name)))
         }
     }
 
-    pub fn add_type(&mut self, name: &str, constructors: Vec<(Constructor, Type)>, universals: HashSet<usize>) -> Result<(), String> {
+    pub fn add_type(&mut self, name: &str, constructors: HashSet<(Constructor, Type)>, universals: HashSet<usize>) -> Result<(), String> {
         let new_typ = SumType::new(name, constructors.clone(), universals);
         let mut new_by_constructor = HashMap::new();
 
@@ -72,16 +77,21 @@ impl Constructor {
 
 #[derive(Debug)]
 #[derive(Clone)]
+#[derive(Eq)]
+#[derive(PartialEq)]
+#[derive(Hash)]
+// won't be hashable if any fields are hashsets
 pub struct SumType {
     pub name: String,
-    pub universals: HashSet<usize>,
-    pub variants: HashSet<(Constructor, Type)>
+    pub universals: Box<Vec<usize>>,
+    pub variants: Box<Vec<(Constructor, Type)>>
 }
 
 impl SumType {
-    pub fn new(name: &str, constructors: Vec<(Constructor, Type)>, universals: HashSet<usize>) -> SumType {
-        let variants = constructors.iter().cloned().collect();
-        SumType{name: String::from(name), variants: variants, universals: universals}
+    pub fn new(name: &str, constructors: HashSet<(Constructor, Type)>, universals: HashSet<usize>) -> SumType {
+        let ctor_vec = constructors.iter().cloned().collect();
+        let univ_vec = universals.iter().cloned().collect();
+        SumType{name: String::from(name), variants: Box::new(ctor_vec), universals: Box::new(univ_vec)}
     }
 }
 

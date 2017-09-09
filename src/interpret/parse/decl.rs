@@ -43,7 +43,7 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar) -> Re
         }
     }
 
-    Ok(SumType{name: name, variants: variants, universals: universals})
+    Ok(SumType::new(&name, variants, universals))
 }
 
 // eventually must also get SumTypeDefs as arg
@@ -114,7 +114,8 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
             Some(Token::Unit) => {
                 typ = Some(Type::Unit);
             },
-            Some(Token::Sum(s)) => { }, //TODO
+            Some(Token::Sum(s)) => {
+            },
             Some(Token::Var(ref s)) => {
                 match vars.get(s) {
                     Some(t) => {
@@ -154,6 +155,7 @@ fn get_sum(mut tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, 
 mod tests {
     use super::*;
     use interpret::structures::arrow;
+    use interpret::structures::sums::SumType;
     use interpret::infer::GenTypeVar;
     use interpret::lex::decl::build_lexer;
 
@@ -198,10 +200,17 @@ mod tests {
         assert_parses_type("((Int -> Bool) -> ()) -> Int", arrow(arrow(arrow(Type::Int, Type::Bool), Type::Unit), Type::Int));
     }
 
+    #[test]
+    fn test_parses_monomorphic_sum_type() {
+        //TODO send in dict
+        let maybe_int = SumType::new("MaybeInt", vec![(Constructor::new("JustInt"), Type::Int), (Constructor::new("Nothing"), Type::Unit)], HashSet::new());
+        assert_parses_type("MaybeInt", Type::Sum(maybe_int));
+    }
+
     /*
     #[test]
-    fn test_parses_other_sum_type() {
-        //TODO
+    fn test_freshly_instantiates_polymorphic_sum_type() {
+    //TODO is this really what I want?
     }
 
     #[test]
