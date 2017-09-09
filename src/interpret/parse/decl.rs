@@ -11,11 +11,7 @@ use interpret::structures::sums::Constructor;
 use interpret::structures::sums::SumType;
 
 pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar) -> Result<SumType, String> {
-    let name = if let Some(Token::Sum(s)) = tokens.next() {
-        s
-    } else {
-        return Err(String::from("Type declaration must begin with an uppercase name"));
-    };
+    let name = get_sum(tokens, "Type declaration must begin with an uppercase name")?;
     let mut type_vars = HashMap::new();
     let mut variants = HashSet::new();
     let mut token_stack = vec![];
@@ -72,10 +68,31 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar) -> Re
 // trickiness: infix arrow
 // luckily it's the only infix we need here...
 fn parse_variant(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, vars: &HashMap<String, Type>) -> Result<(Constructor, Type), String> {
-    tokens.next();
-    let c = Constructor::new("Hello");
+    let name = get_sum(tokens, "Missing constructor on right-hand side of type declaration")?;
+
+    loop {
+        match tokens.peek().cloned() {
+            Some(Token::Separator) => {
+                tokens.next();
+                break;
+            },
+            None => { break; },
+            _ => { tokens.next(); } //TODO logic here
+        }
+    }
+
+    let c = Constructor{name: name};
     let t = Type::Unit;
+
     Ok((c, t))
+}
+
+fn get_sum(mut tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, String> {
+    println!("{:?}", tokens.peek());
+    match tokens.next() {
+        Some(Token::Sum(s)) => Ok(s),
+        _ => Err(String::from(msg))
+    }
 }
 
 /*
@@ -89,6 +106,16 @@ mod tests {
     use super::*;
     use interpret::infer::GenTypeVar;
     use interpret::lex::decl::build_lexer;
+
+    /* Test parse_variant */
+    #[test]
+    fn test_parses_constructor_name() {
+        let mut tokens = build_lexer("Empty | Full");
+        let variant = parse_variant(&mut tokens, &mut vec![], &HashMap::new()).unwrap();
+        assert_eq!(&variant.0.name, "Empty");
+    }
+
+    /* Test parse */
 
     fn assert_parse_err(decl: &str, msg: &str) {
         let mut tokens = build_lexer(decl);
