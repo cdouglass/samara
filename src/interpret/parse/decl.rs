@@ -16,14 +16,14 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar) -> Re
     } else {
         return Err(String::from("Type declaration must begin with an uppercase name"));
     };
-    let mut vars = HashMap::new();
+    let mut type_vars = HashMap::new();
     let mut variants = HashSet::new();
     let mut token_stack = vec![];
 
     loop {
         match tokens.next() {
             Some(Token::Var(name)) => {
-                vars.insert(name, gen.next().unwrap());
+                type_vars.insert(name, gen.next().unwrap());
             },
             Some(Token::Eql) => {
                 break;
@@ -35,7 +35,7 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar) -> Re
     }
 
     loop {
-        let variant = parse_variant(tokens, &mut token_stack, &vars)?;
+        let variant = parse_variant(tokens, &mut token_stack, &type_vars)?;
         variants.insert(variant);
 
         if !token_stack.is_empty() {
@@ -44,7 +44,14 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar) -> Re
         if let None = tokens.peek() { break; }
     }
 
-    Ok(SumType{name: name, variants: variants})
+    let mut universals = HashSet::new();
+    for typ in type_vars.values() {
+        if let Type::TypeVar(n) = *typ {
+            universals.insert(n);
+        }
+    }
+
+    Ok(SumType{name: name, variants: variants, universals: universals})
 }
 
 // TODO SumType should include set of type variables
