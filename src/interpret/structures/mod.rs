@@ -7,6 +7,14 @@ pub mod sums;
 
 use self::Op::*;
 
+/* Misc convenience functions */
+
+pub fn arrow(t1: Type, t2: Type) -> Type {
+    Type::Arrow(Box::new(t1), Box::new(t2))
+}
+
+/* Enums + structs */
+
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub enum Atom {

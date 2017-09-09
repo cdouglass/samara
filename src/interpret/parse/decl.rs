@@ -6,6 +6,7 @@ use std::iter::Peekable;
 use interpret::infer::GenTypeVar;
 use interpret::lex::decl::Token;
 use interpret::lex::decl::TokenStream;
+use interpret::structures::arrow;
 use interpret::structures::Type;
 use interpret::structures::sums::Constructor;
 use interpret::structures::sums::SumType;
@@ -92,7 +93,18 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
             Some(Token::Eql) => {
                 return Err(String::from("Unexpected token = in right-hand side of type declaration"));
             },
-            Some(Token::Arrow) => { }, //TODO
+            Some(Token::Arrow) => {
+                match typ {
+                    Some(input_type) => {
+                        let output_type = parse_type(tokens, token_stack, vars)?;
+                        typ = Some(arrow(input_type, output_type));
+                    },
+                    None => {
+                        return Err(String::from("Unexpected token ->. Must come between input and output types."));
+                    }
+                }
+
+            },
             Some(Token::Bool) => {
                 typ = Some(Type::Bool);
             },
@@ -141,6 +153,7 @@ fn get_sum(mut tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use interpret::structures::arrow;
     use interpret::infer::GenTypeVar;
     use interpret::lex::decl::build_lexer;
 
@@ -177,12 +190,15 @@ mod tests {
         assert_eq!(&err, msg)
     }
 
-    /*
     #[test]
     fn test_parses_function_type() {
-        //TODO
+        assert_parses_type("Int -> Bool", arrow(Type::Int, Type::Bool));
+        assert_parses_type("Int -> Bool -> Int", arrow(Type::Int, (arrow(Type::Bool, Type::Int))));
+        assert_parses_type("(Int -> Bool) -> Int", arrow(arrow(Type::Int, Type::Bool), Type::Int));
+        assert_parses_type("((Int -> Bool) -> ()) -> Int", arrow(arrow(arrow(Type::Int, Type::Bool), Type::Unit), Type::Int));
     }
 
+    /*
     #[test]
     fn test_parses_other_sum_type() {
         //TODO

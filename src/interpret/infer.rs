@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::Iterator;
 
+use interpret::structures::arrow;
 use interpret::structures::Atom;
 use interpret::structures::LetBinding;
 use interpret::structures::Op;
@@ -197,10 +198,6 @@ fn type_vars_free_in(typ: &Type) -> HashSet<usize> {
         _ => { }
     }
     tvars
-}
-
-fn arrow(t1: Type, t2: Type) -> Type {
-    Arrow(Box::new(t1), Box::new(t2))
 }
 
 fn base_type(atom: &Atom) -> Type {
