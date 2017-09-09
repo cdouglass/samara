@@ -81,6 +81,7 @@ impl Constructor {
 #[derive(PartialEq)]
 #[derive(Hash)]
 // won't be hashable if any fields are hashsets
+// TODO redo this completely more efficiently
 pub struct SumType {
     pub name: String,
     pub universals: Box<Vec<usize>>,
@@ -89,8 +90,9 @@ pub struct SumType {
 
 impl SumType {
     pub fn new(name: &str, constructors: HashSet<(Constructor, Type)>, universals: HashSet<usize>) -> SumType {
-        let ctor_vec = constructors.iter().cloned().collect();
-        let univ_vec = universals.iter().cloned().collect();
+        let mut ctor_vec: Vec<(Constructor, Type)> = constructors.iter().cloned().collect();
+        let univ_vec: Vec<usize> = universals.iter().cloned().collect();
+        ctor_vec.sort_by_key(|x| x.0.name.clone());
         SumType{name: String::from(name), variants: Box::new(ctor_vec), universals: Box::new(univ_vec)}
     }
 
@@ -106,15 +108,15 @@ mod tests {
     /* Helpers */
     fn maybe() -> HashSet<(Constructor, Type)> {
         let mut variants = HashSet::new();
-        variants.insert((Constructor::new("None"), Unit));
         variants.insert((Constructor::new("Just"), TypeVar(0)));
+        variants.insert((Constructor::new("None"), Unit));
         variants
     }
 
     fn bar() -> HashSet<(Constructor, Type)> {
         let mut variants = HashSet::new();
-        variants.insert((Constructor::new("Foo"), Int));
         variants.insert((Constructor::new("Bar"), Bool));
+        variants.insert((Constructor::new("Foo"), Int));
         variants
     }
 
