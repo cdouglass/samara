@@ -123,5 +123,22 @@ mod tests {
 
     #[test]
     fn test_parses_type_vars() {
+        let mut gen = GenTypeVar::new();
+
+        let mut tokens = build_lexer("Foo a b c = Bar");
+        let sum_type = parse(&mut tokens, &mut gen).unwrap();
+        let mut vars = HashSet::new();
+        for n in vec![1, 2, 3] {
+            vars.insert(n);
+        }
+        assert_eq!(sum_type.universals, vars);
+
+        let mut tokens = build_lexer("Baz a b = Quux");
+        let sum_type = parse(&mut tokens, &mut gen).unwrap();
+        let mut vars = HashSet::new();
+        for n in vec![4, 5] {
+            vars.insert(n);
+        }
+        assert_eq!(sum_type.universals, vars);
     }
 }
