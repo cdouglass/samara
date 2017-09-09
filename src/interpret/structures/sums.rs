@@ -93,6 +93,10 @@ impl SumType {
         let univ_vec = universals.iter().cloned().collect();
         SumType{name: String::from(name), variants: Box::new(ctor_vec), universals: Box::new(univ_vec)}
     }
+
+    pub fn universals(&self) -> HashSet<usize> {
+        self.universals.iter().cloned().collect()
+    }
 }
 
 #[cfg(test)]
@@ -100,12 +104,18 @@ mod tests {
     use super::*;
 
     /* Helpers */
-    fn maybe() -> Vec<(Constructor, Type)> {
-        vec![(Constructor::new("Just"), TypeVar(0)), (Constructor::new("None"), Unit)]
+    fn maybe() -> HashSet<(Constructor, Type)> {
+        let mut variants = HashSet::new();
+        variants.insert((Constructor::new("None"), Unit));
+        variants.insert((Constructor::new("Just"), TypeVar(0)));
+        variants
     }
 
-    fn bar() -> Vec<(Constructor, Type)> {
-        vec![(Constructor::new("Foo"), Int), (Constructor::new("Bar"), Bool)]
+    fn bar() -> HashSet<(Constructor, Type)> {
+        let mut variants = HashSet::new();
+        variants.insert((Constructor::new("Foo"), Int));
+        variants.insert((Constructor::new("Bar"), Bool));
+        variants
     }
 
     /* Tests */
@@ -126,7 +136,9 @@ mod tests {
     fn test_constructor_names_must_be_unique() {
         let mut defs = SumTypeDefs::new();
         defs.add_type("Maybe", maybe(), HashSet::new()).unwrap();
-        let dup = vec![(Constructor::new("Foo"), Int), (Constructor::new("None"), Bool)];
+        let mut dup = HashSet::new();
+        dup.insert((Constructor::new("Foo"), Int));
+        dup.insert((Constructor::new("None"), Bool));
         match defs.add_type("Foo", dup, HashSet::new()) {
             Ok(()) => panic!("Should not allow new sum type that reuses an existing constructor name!"),
             Err(msg) => assert_eq!(&msg, "Ambiguous constructor: None is already defined for type Maybe")
@@ -139,8 +151,8 @@ mod tests {
         defs.add_type("Maybe", maybe(), HashSet::new()).unwrap();
         defs.add_type("Bar", bar(), HashSet::new()).unwrap();
 
-        let maybe_type = Sum(String::from("Maybe"));
-        let bar_type = Sum(String::from("Bar"));
+        let maybe_type = SumType::new("Maybe", maybe(), HashSet::new());
+        let bar_type = SumType::new("Bar", bar(), HashSet::new());
         assert_eq!(defs.type_of(Constructor::new("Just")), Ok(maybe_type));
         assert_eq!(defs.type_of(Constructor::new("Foo")), Ok(bar_type));
 

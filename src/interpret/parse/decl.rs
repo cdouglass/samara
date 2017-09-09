@@ -203,7 +203,10 @@ mod tests {
     #[test]
     fn test_parses_monomorphic_sum_type() {
         //TODO send in dict
-        let maybe_int = SumType::new("MaybeInt", vec![(Constructor::new("JustInt"), Type::Int), (Constructor::new("Nothing"), Type::Unit)], HashSet::new());
+        let mut variants = HashSet::new();
+        variants.insert((Constructor::new("JustInt"), Type::Int));
+        variants.insert((Constructor::new("Nothing"), Type::Unit));
+        let maybe_int = SumType::new("MaybeInt", variants, HashSet::new());
         assert_parses_type("MaybeInt", Type::Sum(maybe_int));
     }
 
@@ -287,7 +290,7 @@ mod tests {
         for n in vec![1, 2, 3] {
             vars.insert(n);
         }
-        assert_eq!(sum_type.universals, vars);
+        assert_eq!(sum_type.universals(), vars);
 
         let mut tokens = build_lexer("Baz a b = Quux");
         let sum_type = parse(&mut tokens, &mut gen).unwrap();
@@ -295,7 +298,7 @@ mod tests {
         for n in vec![4, 5] {
             vars.insert(n);
         }
-        assert_eq!(sum_type.universals, vars);
+        assert_eq!(sum_type.universals(), vars);
     }
 
     /*TODO
