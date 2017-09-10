@@ -43,20 +43,6 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_t
     Ok(SumTypeScheme::new(&name, variants, universals))
 }
 
-// eventually must also get SumTypeDefs as arg
-// expects, in order:
-// * Sum(s) - the name of the type
-// * any number of Var(s) - type variables that declared for use on the right-hand side
-// * Eq
-// * any number of types separated by Separator
-
-// use of undeclared typevar on right-hand side of declaration is an error
-// returns at Token::Close, end of input, or Separator
-// caller should then check token stack is empty - if it's not, this is always an error
-// Eq is an error as well
-//
-// trickiness: infix arrow
-// luckily it's the only infix we need here...
 fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<(Constructor, Type), String> {
     let name = get_sum(tokens, "Missing constructor in right-hand side of type declaration")?;
     let mut token_stack = vec![];
@@ -82,7 +68,6 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
 
     let mut typ : Type;
 
-    // ONLY time not to return early is OPEN, Arrow, or Sum
     match tokens.next() {
         Some(Token::Open) => {
             token_stack.push(Token::Open);
@@ -169,12 +154,6 @@ fn get_sum(mut tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, 
     }
 }
 
-/*
- * Test cases to consider
- *
- * Arrow case analogous to bug for expression parsing: Foo = x -> x
- */
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,7 +229,6 @@ mod tests {
         assert_eq!(&err, msg)
     }
 
-
     #[test]
     fn test_parses_nested_type() {
         let mut variants = HashSet::new();
@@ -265,13 +243,6 @@ mod tests {
         let expected = maybe.apply(vec![maybe.apply(vec![Type::Int]).unwrap()]).unwrap();
         assert_parses_type_with_context("Maybe (Maybe Int)", expected, &sum_types);
     }
-
-    /*
-    #[test]
-    fn test_freshly_instantiates_polymorphic_sum_type() {
-    //TODO is this really what I want?
-    }
-    */
 
     #[test]
     fn test_extra_close_paren() {
@@ -364,12 +335,4 @@ mod tests {
         let sum_type = parse(&mut tokens, &mut gen, &SumTypeDefs::new()).unwrap();
         assert_eq!(sum_type.universals, vec![4, 5]);
     }
-
-    /*TODO
-    #[test]
-    fn test_unbalanced_parens() {
-        assert_parse_err("Foo = Bar(", "Unexpected end of input");
-    }
-    */
-
 }
