@@ -2,21 +2,22 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::slice::Iter;
 
+use interpret::infer::apply_substitution;
 use interpret::structures::Type;
 use interpret::structures::Type::*;
 
 #[derive(Debug)]
 pub struct SumTypeDefs {
-    types: HashMap<String, SumType>,
-    by_constructor: HashMap<Constructor, SumType>
+    types: HashMap<String, SumTypeScheme>,
+    by_constructor: HashMap<Constructor, SumTypeScheme>
 }
 
 impl SumTypeDefs {
-    pub fn type_from_name(&self, t: &str) -> Option<Type> {
-        self.types.get(t).cloned().map(Type::Sum)
+    pub fn type_from_name(&self, t: &str) -> Option<SumTypeScheme> {
+        self.types.get(t).cloned()
     }
 
-    pub fn type_of(&self, constr: Constructor) -> Result<SumType, String> {
+    pub fn type_of(&self, constr: Constructor) -> Result<SumTypeScheme, String> {
         match self.by_constructor.get(&constr) {
             Some(typ) => Ok(typ.clone()),
             None => Err(String::from(format!("Constructor {} does not exist", constr.name)))
@@ -35,7 +36,7 @@ impl SumTypeDefs {
     }
 
     pub fn add_type(&mut self, name: &str, constructors: HashSet<(Constructor, Type)>, universals: Vec<usize>) -> Result<(), String> {
-        let new_typ = SumType::new(name, constructors.clone(), universals);
+        let new_typ = SumTypeScheme::new(name, constructors.clone(), universals);
         let mut new_by_constructor = HashMap::new();
 
         for typ in self.types.values() {
@@ -86,21 +87,42 @@ impl Constructor {
 #[derive(Hash)]
 // won't be hashable if any fields are hashsets
 // TODO redo this completely more efficiently
-pub struct SumType {
+pub struct SumTypeScheme {
     pub name: String,
     pub universals: Vec<usize>,
     pub variants: Vec<(Constructor, Type)>
 }
 
-impl SumType {
-    pub fn new(name: &str, constructors: HashSet<(Constructor, Type)>, universals: Vec<usize>) -> SumType {
+#[derive(Debug)]
+#[derive(Clone)]
+#[derive(Eq)]
+#[derive(PartialEq)]
+#[derive(Hash)]
+pub struct SumType {
+    pub name: String,
+    pub variants: Vec<(Constructor, Type)>
+}
+
+impl SumTypeScheme {
+    pub fn new(name: &str, constructors: HashSet<(Constructor, Type)>, universals: Vec<usize>) -> SumTypeScheme {
         let mut ctor_vec: Vec<(Constructor, Type)> = constructors.iter().cloned().collect();
         ctor_vec.sort_by_key(|x| x.0.name.clone());
-        SumType{name: String::from(name), variants: ctor_vec, universals: universals}
+        SumTypeScheme{name: String::from(name), variants: ctor_vec, universals: universals}
     }
 
-    pub fn universals(&self) -> HashSet<usize> {
-        self.universals.iter().cloned().collect()
+    pub fn apply(&self, parameters: Vec<Type>) -> Result<Type, String> {
+        if self.universals.len() != parameters.len() {
+            return Err(String::from(format!("Type operator {} requires exactly {} parameter(s), got {}: {:?}", self.name, self.universals.len(), parameters.len(), parameters)));
+        } else {
+            let substitution = self.universals.iter().cloned().zip(parameters.iter().cloned()).collect();
+            let mut variants = vec![];
+            for &(ref constructor, ref typ) in self.variants.iter() {
+                let mut t = typ.clone();
+                apply_substitution(&substitution, &mut t);
+                variants.push((constructor.clone(), t));
+            }
+            Ok(Type::Sum(SumType{name: self.name.clone(), variants: variants}))
+        }
     }
 }
 
@@ -123,7 +145,51 @@ mod tests {
         variants
     }
 
-    /* Tests */
+    /* Test SumTypeScheme */
+
+    #[test]
+    fn test_apply_sum_type_to_wrong_number_of_args() {
+        let sum_type = SumTypeScheme::new("Maybe", maybe(), vec![0]);
+        let err = sum_type.apply(vec![Type::Int, Type::Bool]).unwrap_err();
+        assert_eq!(&err, "Type operator Maybe requires exactly 1 parameter(s), got 2: [Int, Bool]");
+
+        let sum_type = SumTypeScheme::new("Bar", bar(), vec![]);
+        let err = sum_type.apply(vec![Type::Int, Type::Bool]).unwrap_err();
+        assert_eq!(&err, "Type operator Bar requires exactly 0 parameter(s), got 2: [Int, Bool]");
+    }
+
+    #[test]
+    fn test_apply_nullary_sum_type() {
+        let typ = SumTypeScheme::new("Bar", bar(), vec![]).apply(vec![]).unwrap();
+        let mut variants = vec![];
+        variants.push((Constructor::new("Bar"), Bool));
+        variants.push((Constructor::new("Foo"), Int));
+        let expected = Type::Sum(SumType{name: String::from("Bar"), variants: variants});
+        assert_eq!(typ, expected);
+    }
+
+    #[test]
+    fn test_apply_unary_sum_type() {
+        let typ = SumTypeScheme::new("Maybe", maybe(), vec![0]).apply(vec![Type::Int]).unwrap();
+        let mut variants = vec![(Constructor::new("Just"), Type::Int), (Constructor::new("None"), Type::Unit)];
+        let expected = Type::Sum(SumType{name: String::from("Maybe"), variants: variants});
+        assert_eq!(typ, expected);
+    }
+
+    #[test]
+    fn test_apply_binary_sum_type() {
+        let mut variants = HashSet::new();
+        variants.insert((Constructor::new("Left"), Type::TypeVar(0)));
+        variants.insert((Constructor::new("Right"), Type::TypeVar(1)));
+        let scheme = SumTypeScheme::new("Either", variants, vec![0, 1]);
+
+        let typ = scheme.apply(vec![Type::Int, Type::Bool]).unwrap();
+        let expected_variants = vec![(Constructor::new("Left"), Type::Int), (Constructor::new("Right"), Type::Bool)];
+        let expected = Type::Sum(SumType{name: String::from("Either"), variants: expected_variants});
+        assert_eq!(typ, expected);
+    }
+
+    /* Test SumTypeDefs */
 
     #[test]
     fn test_insert_valid_type() {
@@ -156,8 +222,8 @@ mod tests {
         defs.add_type("Maybe", maybe(), vec![]).unwrap();
         defs.add_type("Bar", bar(), vec![]).unwrap();
 
-        let maybe_type = SumType::new("Maybe", maybe(), vec![]);
-        let bar_type = SumType::new("Bar", bar(), vec![]);
+        let maybe_type = SumTypeScheme::new("Maybe", maybe(), vec![]);
+        let bar_type = SumTypeScheme::new("Bar", bar(), vec![]);
         assert_eq!(defs.type_of(Constructor::new("Just")), Ok(maybe_type));
         assert_eq!(defs.type_of(Constructor::new("Foo")), Ok(bar_type));
 

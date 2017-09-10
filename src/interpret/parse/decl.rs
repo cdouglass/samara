@@ -9,22 +9,25 @@ use interpret::lex::decl::TokenStream;
 use interpret::structures::arrow;
 use interpret::structures::Type;
 use interpret::structures::sums::Constructor;
-use interpret::structures::sums::SumType;
+use interpret::structures::sums::SumTypeScheme;
 use interpret::structures::sums::SumTypeDefs;
 
-pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<SumType, String> {
+pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<SumTypeScheme, String> {
     let name = get_sum(tokens, "Type declaration must begin with an uppercase name")?;
     let mut type_vars = HashMap::new();
     let mut variants = HashSet::new();
+    let mut universals = vec![];
 
     loop {
         match tokens.next() {
             Some(Token::Var(name)) => {
-                type_vars.insert(name, gen.next().unwrap());
+                let tv = gen.next().unwrap();
+                if let Type::TypeVar(n) = tv {
+                    universals.push(n);
+                }
+                type_vars.insert(name, tv);
             },
-            Some(Token::Eql) => {
-                break;
-            },
+            Some(Token::Eql) => { break; },
             _ => {
                 return Err(String::from("Invalid token in left-hand side of type declaration"));
             }
@@ -37,14 +40,7 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_t
         if tokens.peek().is_none() { break; }
     }
 
-    let mut universals = vec![];
-    for typ in type_vars.values() {
-        if let Type::TypeVar(n) = *typ {
-            universals.push(n);
-        }
-    }
-
-    Ok(SumType::new(&name, variants, universals))
+    Ok(SumTypeScheme::new(&name, variants, universals))
 }
 
 // eventually must also get SumTypeDefs as arg
@@ -117,8 +113,9 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
             Some(Token::Sum(ref s)) => {
                 match sum_types.type_from_name(s) {
                     Some(t) => {
-                        typ = Some(t);
+                        //TODO get vector of params
                         //TODO handle non-nullary type operators
+                        typ = Some(t.apply(vec![])?);
                     },
                     None => {
                         return Err(String::from(format!("Undeclared sum type {}", s)));
@@ -163,7 +160,7 @@ fn get_sum(mut tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, 
 mod tests {
     use super::*;
     use interpret::structures::arrow;
-    use interpret::structures::sums::SumType;
+    use interpret::structures::sums::SumTypeScheme;
     use interpret::infer::GenTypeVar;
     use interpret::lex::decl::build_lexer;
 
@@ -219,11 +216,11 @@ mod tests {
         let c2 = (Constructor::new("Nothing"), Type::Unit);
         variants.insert(c1);
         variants.insert(c2);
-        let maybe_int = SumType::new("MaybeInt", variants.clone(), vec![]);
+        let maybe_int = SumTypeScheme::new("MaybeInt", variants.clone(), vec![]);
 
         let mut sum_types = SumTypeDefs::new();
         sum_types.add_type("MaybeInt", variants, vec![]);
-        assert_parses_type_with_context("MaybeInt", Type::Sum(maybe_int), &sum_types);
+        assert_parses_type_with_context("MaybeInt", maybe_int.apply(vec![]).unwrap(), &sum_types);
     }
 
     #[test]
@@ -313,19 +310,11 @@ mod tests {
 
         let mut tokens = build_lexer("Foo a b c = Bar");
         let sum_type = parse(&mut tokens, &mut gen, &SumTypeDefs::new()).unwrap();
-        let mut vars = HashSet::new();
-        for n in vec![1, 2, 3] {
-            vars.insert(n);
-        }
-        assert_eq!(sum_type.universals(), vars);
+        assert_eq!(sum_type.universals, vec![1, 2, 3]);
 
         let mut tokens = build_lexer("Baz a b = Quux");
         let sum_type = parse(&mut tokens, &mut gen, &SumTypeDefs::new()).unwrap();
-        let mut vars = HashSet::new();
-        for n in vec![4, 5] {
-            vars.insert(n);
-        }
-        assert_eq!(sum_type.universals(), vars);
+        assert_eq!(sum_type.universals, vec![4, 5]);
     }
 
     /*TODO

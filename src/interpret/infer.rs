@@ -24,7 +24,8 @@ pub fn infer_type(term: &Term, bindings: &[LetBinding], mut gen: &mut GenTypeVar
     Ok(typ)
 }
 
-fn apply_substitution(substitution: &HashMap<usize, Type>, typ: &mut Type) {
+//TODO move to structures module
+pub fn apply_substitution(substitution: &HashMap<usize, Type>, typ: &mut Type) {
     match *typ {
         TypeVar(n) => {
             if let Some(t) = substitution.get(&n) {
