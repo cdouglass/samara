@@ -93,7 +93,10 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
         Some(Token::Int) => {
             typ = Type::Int;
         },
-        Some(Token::Unit) | None => {
+        Some(Token::Separator) | None => {
+            return Ok(Type::Unit);
+        },
+        Some(Token::Unit) => {
             typ = Type::Unit;
         },
         Some(Token::Sum(ref s)) => {
@@ -136,7 +139,7 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
             typ = arrow(input_type, output_type);
         },
         Some(Token::Close) => {
-            if let Some(Token::Open) = token_stack.last().cloned() {
+            if let Some(Token::Open) = token_stack.pop() {
                 token_stack.pop();
                 tokens.next();
             } else {
