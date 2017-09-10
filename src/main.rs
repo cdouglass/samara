@@ -69,7 +69,7 @@ fn main() {
             Some(Command::Exit) => break,
             Some(Command::Help) => println!("{}", USAGE),
             Some(Command::TypeOf(s)) => {
-                let result = interpret::type_of(&s, &bindings, &mut gen_type_var);
+                let result = interpret::type_of(&s, &bindings, &mut gen_type_var, &sum_type_defs);
                 match result {
                     (Ok(term), Ok(typ)) => println!("{:?} : {:?}", term, typ),
                     (Err(msg), _) | (_, Err(msg)) => println!("{}", msg)
@@ -84,7 +84,7 @@ fn main() {
                         Err(msg) => println!("{:?}", msg)
                     }
                 } else {
-                    let result = interpret::evaluate(&expr, &mut bindings, &mut gen_type_var);
+                    let result = interpret::evaluate(&expr, &mut bindings, &mut gen_type_var, &sum_type_defs);
                     match result {
                         Ok(term) => println!("{:?}", term),
                         Err(msg) => println!("{}", msg)

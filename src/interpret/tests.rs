@@ -1,6 +1,7 @@
 use interpret::evaluate;
 use interpret::type_of;
 use interpret::GenTypeVar;
+use interpret::SumTypeDefs;
 use interpret::structures::Atom;
 use interpret::structures::LetBinding;
 use interpret::structures::Op;
@@ -10,7 +11,7 @@ use interpret::structures::Type;
 /* Test helpers */
 
 fn assert_evaluation_err(expr: &str, mut bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar, msg: &str) {
-    match evaluate(expr, bindings, gen) {
+    match evaluate(expr, bindings, gen, &SumTypeDefs::new()) {
         Err(m) => { assert_eq!(m, msg) },
         result => {
             println!("Expected Err({}). Instead got {:?}", msg, result);
@@ -20,7 +21,8 @@ fn assert_evaluation_err(expr: &str, mut bindings: &mut Vec<LetBinding>, mut gen
 }
 
 fn assert_evaluates_to_atom(expr: &str, mut bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar, expected: Atom) {
-    match evaluate(expr, &mut bindings, gen).unwrap() {
+    let mut sum_types = SumTypeDefs::new();
+    match evaluate(expr, &mut bindings, gen, &sum_types).unwrap() {
         Term::Atom(a) => assert_eq!(a, expected),
         result => {
             println!("Expected {:?}. Instead got {:?}", expected, result);
@@ -50,7 +52,8 @@ fn test_evaluate_op() {
 #[test]
 fn test_partially_apply_op() {
     let mut gen = GenTypeVar::new();
-    let result = evaluate("(% 10)", &mut vec![], &mut gen).unwrap();
+    let mut sum_types = SumTypeDefs::new();
+    let result = evaluate("(% 10)", &mut vec![], &mut gen, &sum_types).unwrap();
     match result {
         Term::App(a, b) => {
             match (*a, *b) {
@@ -98,13 +101,14 @@ fn test_polymorphic_let() {
 fn test_polymorphic_session_let() {
     let mut bindings = vec![];
     let mut gen = GenTypeVar::new();
-    evaluate("let id = (\\x -> x)", &mut bindings, &mut gen).unwrap();
+    let mut sum_types = SumTypeDefs::new();
+    evaluate("let id = (\\x -> x)", &mut bindings, &mut gen, &sum_types).unwrap();
 
     assert_evaluates_to_atom("id 5", &mut bindings, &mut gen, Atom::Int(5));
     assert_evaluates_to_atom("id False", &mut bindings, &mut gen, Atom::Bool(false));
 
     // (b -> c) -> (a -> b) -> a -> c
-    evaluate("let compose = (\\f -> (\\g -> (\\x -> f (g x))))", &mut bindings, &mut gen).unwrap();
+    evaluate("let compose = (\\f -> (\\g -> (\\x -> f (g x))))", &mut bindings, &mut gen, &sum_types).unwrap();
     // (Int -> Int) -> (Int -> Int) -> Int -> Int
     assert_evaluates_to_atom("compose (\\x -> (- x 1)) (\\x -> (* x 3)) 5", &mut bindings, &mut gen, Atom::Int(14));
     // (Int -> Bool) -> (Bool -> Int) -> Bool -> Bool
@@ -127,9 +131,10 @@ fn test_save_session_bindings() {
 
     let mut bindings = vec![];
     let mut gen = GenTypeVar::new();
-    evaluate("let x = (* 5 10)", &mut bindings, &mut gen).unwrap();
+    let mut sum_types = SumTypeDefs::new();
+    evaluate("let x = (* 5 10)", &mut bindings, &mut gen, &sum_types).unwrap();
 
-    let reuse = evaluate("x", &mut bindings, &mut gen);
+    let reuse = evaluate("x", &mut bindings, &mut gen, &sum_types);
     assert_eq!(reuse, expected);
 }
 
@@ -137,7 +142,8 @@ fn test_save_session_bindings() {
 fn test_recursive_session_bindings() {
     let mut bindings = vec![];
     let mut gen = GenTypeVar::new();
-    evaluate("let fact = (\\n -> if (< n 2) then 1 else (* n (fact (- n 1))))", &mut bindings, &mut gen).unwrap();
+    let mut sum_types = SumTypeDefs::new();
+    evaluate("let fact = (\\n -> if (< n 2) then 1 else (* n (fact (- n 1))))", &mut bindings, &mut gen, &sum_types).unwrap();
     assert_evaluates_to_atom("fact 8", &mut bindings, &mut GenTypeVar::new(), Atom::Int(40320));
 }
 
@@ -145,7 +151,8 @@ fn test_recursive_session_bindings() {
 fn test_type_of_using_session_bindings() {
     let mut bindings = vec![];
     let mut gen = GenTypeVar::new();
-    evaluate("let x = (* 5 10)", &mut bindings, &mut gen).unwrap();
-    let typ = type_of("x", &bindings, &mut gen).1.unwrap();
+    let mut sum_types = SumTypeDefs::new();
+    evaluate("let x = (* 5 10)", &mut bindings, &mut gen, &sum_types).unwrap();
+    let typ = type_of("x", &bindings, &mut gen, &sum_types).1.unwrap();
     assert_eq!(typ, Type::Int);
 }

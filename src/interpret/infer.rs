@@ -217,6 +217,7 @@ fn base_type(atom: &Atom) -> Type {
 mod tests {
     use super::*;
     use interpret::evaluate;
+    use interpret::SumTypeDefs;
     use self::LetBinding;
     use self::Op::*;
 
@@ -377,7 +378,8 @@ mod tests {
     fn test_fresh_instantiation() {
         let mut bindings = vec![];
         let mut gen = GenTypeVar::new();
-        evaluate("let id = (\\x -> x)", &mut bindings, &mut gen).unwrap();
+        let mut sum_types = SumTypeDefs::new();
+        evaluate("let id = (\\x -> x)", &mut bindings, &mut gen, &sum_types).unwrap();
         let x = Term::Var(0, String::new());
         assert_type_with_context(&x, &arrow(TypeVar(3), TypeVar(3)), &bindings, &mut gen);
         assert_type_with_context(&x, &arrow(TypeVar(4), TypeVar(4)), &bindings, &mut gen);

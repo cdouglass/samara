@@ -9,9 +9,10 @@ use interpret::lex::expr::Keyword::*;
 use interpret::structures::Atom;
 use interpret::structures::Constructor;
 use interpret::structures::Op;
+use interpret::SumTypeDefs;
 use interpret::structures::Term;
 
-pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
+pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
     let close_err = Err(String::from("Unexpected CLOSE delimiter"));
     let end_of_input_err = Err(String::from("Unexpected end of input"));
     let syntax_err = Err(String::from("Syntax error"));
@@ -27,7 +28,7 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             Some(Token::Open) => {
                 tokens.next();
                 token_stack.push(Token::Open);
-                parse(tokens, &mut token_stack, &mut identifier_stack)
+                parse(tokens, &mut token_stack, &mut identifier_stack, sum_types)
             },
             Some(Token::Close) => {
                 match token_stack.last() {
@@ -46,7 +47,7 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
                     (Some(Token::Identifier(s)), Some(Token::Keyword(Arrow))) => {
                         identifier_stack.push(s.clone());
                         token_stack.push(Token::Keyword(Arrow));
-                        let body = parse(tokens, &mut token_stack, &mut identifier_stack);
+                        let body = parse(tokens, &mut token_stack, &mut identifier_stack, sum_types);
                         identifier_stack.pop();
                         let result = body.map(|b| Term::Lambda(Box::new(b), s));
                         match token_stack.pop() {
@@ -61,10 +62,10 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
                 tokens.next();
                 match k {
                     Arrow => { return lambda_syntax_err; },
-                    If    => parse_conditional(tokens, &mut token_stack, &mut identifier_stack),
+                    If    => parse_conditional(tokens, &mut token_stack, &mut identifier_stack, sum_types),
                     True  => { Ok(Term::Atom(Atom::Bool(true))) },
                     False => { Ok(Term::Atom(Atom::Bool(false))) },
-                    Let   => parse_let(tokens, &mut token_stack, &mut identifier_stack),
+                    Let   => parse_let(tokens, &mut token_stack, &mut identifier_stack, sum_types),
                     k    => {
                         if token_stack.pop() == Some(Token::Keyword(k)) {
                             break;
@@ -116,33 +117,33 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
     }
 }
 
-fn parse_conditional(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
+fn parse_conditional(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
     token_stack.push(Token::Keyword(Then));
-    let predicate = parse(tokens, token_stack, identifier_stack);
+    let predicate = parse(tokens, token_stack, identifier_stack, sum_types);
 
     token_stack.push(Token::Keyword(Else));
-    let true_case = parse(tokens, token_stack, identifier_stack);
+    let true_case = parse(tokens, token_stack, identifier_stack, sum_types);
 
-    let false_case = parse(tokens, token_stack, identifier_stack);
+    let false_case = parse(tokens, token_stack, identifier_stack, sum_types);
     match (predicate, true_case, false_case) {
         (Ok(p), Ok(t), Ok(f)) => Ok(Term::Conditional(Box::new(p), Box::new(t), Box::new(f))),
         (Err(msg), _, _) | (_, Err(msg), _) | (_, _, Err(msg)) => Err(msg)
     }
 }
 
-fn parse_let(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>) -> Result<Term, String> {
+fn parse_let(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
     let syntax_err = Err(String::from("Syntax error"));
 
     match (tokens.next(), tokens.next()) {
         (Some(Token::Identifier(s)), Some(Token::Keyword(Assign))) => {
             identifier_stack.push(s.clone());
             token_stack.push(Token::Keyword(In));
-            let value = parse(tokens, &mut token_stack, &mut identifier_stack)?;
+            let value = parse(tokens, &mut token_stack, &mut identifier_stack, sum_types)?;
 
             if *token_stack == vec![Token::Keyword(In)] {
                 Ok(Term::Let(s, Box::new(value), None))
             } else {
-                let body = Some(parse(tokens, &mut token_stack, &mut identifier_stack)?);
+                let body = Some(parse(tokens, &mut token_stack, &mut identifier_stack, sum_types)?);
                 identifier_stack.pop();
                 Ok(Term::Let(s, Box::new(value), body.map(Box::new)))
             }
@@ -154,6 +155,7 @@ fn parse_let(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
 #[cfg(test)]
 mod tests {
     use super::parse;
+    use interpret::SumTypeDefs;
     use interpret::lex::build_lexer;
     use interpret::lex::TokenStream as TS;
     use interpret::lex::expr::TokenStream;
@@ -164,11 +166,12 @@ mod tests {
     fn assert_parse(expr: &str, expected: Term) {
         let mut token_stack = vec![];
         let mut ids = vec![];
+        let mut sum_types = SumTypeDefs::new();
         let mut tokens = match build_lexer(expr) {
             TS::Expr(ts) => ts,
             _ => panic!()
         };
-        match parse(&mut tokens, &mut token_stack, &mut ids) {
+        match parse(&mut tokens, &mut token_stack, &mut ids, &sum_types) {
             Err(msg) => {
                 println!("Expected term {:?} but got error {}", expected, msg);
                 panic!()
@@ -180,11 +183,12 @@ mod tests {
     fn assert_parse_err(expr: &str, msg: &str) {
         let mut token_stack = vec![];
         let mut ids = vec![];
+        let mut sum_types = SumTypeDefs::new();
         let mut tokens = match build_lexer(expr) {
             TS::Expr(ts) => ts,
             _ => panic!()
         };
-        match parse(&mut tokens, &mut token_stack, &mut ids) {
+        match parse(&mut tokens, &mut token_stack, &mut ids, &sum_types) {
             Err(m) => assert_eq!(m, msg),
             Ok(term) => {
                 println!("Expected parse error {} but got success {:?}", msg, term);
@@ -199,7 +203,7 @@ mod tests {
             TS::Expr(ts) => ts,
             _ => panic!()
         };
-        let ast = parse(&mut token_stream, &mut vec![], &mut vec![]);
+        let ast = parse(&mut token_stream, &mut vec![], &mut vec![], &SumTypeDefs::new());
         let expected =
             Term::App(
                 Box::new(Term::Lambda(
@@ -219,11 +223,12 @@ mod tests {
 
     #[test]
     fn test_parses_constructor() {
+        let mut sum_types = SumTypeDefs::new();
         let mut token_stream = match build_lexer("Foo") {
             TS::Expr(ts) => ts,
             _ => panic!()
         };
-        let ast = parse(&mut token_stream, &mut vec![], &mut vec![]).unwrap();
+        let ast = parse(&mut token_stream, &mut vec![], &mut vec![], &sum_types).unwrap();
         let expected = Term::Sum(Constructor::new("Foo"), None);
         assert_eq!(ast, expected);
     }

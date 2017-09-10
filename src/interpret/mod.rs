@@ -24,8 +24,8 @@ use self::infer::GenTypeVar;
 #[cfg(test)]
 mod tests;
 
-pub fn type_of(expr: &str, bindings: &[LetBinding], mut gen: &mut GenTypeVar) -> (Result<Term, String>, Result<Type, String>) {
-    let ast = parse_from_str(expr, bindings);
+pub fn type_of(expr: &str, bindings: &[LetBinding], mut gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> (Result<Term, String>, Result<Type, String>) {
+    let ast = parse_from_str(expr, bindings, sum_types);
     match ast {
         Ok(term) =>{
             let typ = infer_type(&term, bindings, &mut gen);
@@ -47,16 +47,16 @@ pub fn declare_sum_type(decl: &str, mut gen: &mut GenTypeVar, mut sum_types: &mu
     }
 }
 
-fn parse_from_str(expr: &str, bindings: &[LetBinding]) -> Result<Term, String> {
+fn parse_from_str(expr: &str, bindings: &[LetBinding], sum_types: &SumTypeDefs) -> Result<Term, String> {
     let mut identifiers: Vec<String> = bindings.into_iter().map(|x| x.name.clone()).collect();
     match build_lexer(expr.trim()) {
-        TokenStream::Expr(mut tokens) => parse_expr(&mut tokens, &mut identifiers),
+        TokenStream::Expr(mut tokens) => parse_expr(&mut tokens, &mut identifiers, sum_types),
         _ => panic!()
     }
 }
 
-pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar) -> Result<Term, String> {
-    match type_of(expr, session_bindings, gen) {
+pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<Term, String> {
+    match type_of(expr, session_bindings, gen, sum_types) {
         (Err(msg), _) | (_, Err(msg)) => Err(msg),
         (Ok(ast), Ok(typ)) => {
             let term = reduce(ast, session_bindings)?;
@@ -244,7 +244,7 @@ fn fix(name: String, value: Term) -> Term {
     let expr = "(\\f -> (\\x -> f (\\y -> x x y)) (\\x -> f (\\y -> x x y)))";
     match build_lexer(expr) {
         TokenStream::Expr(mut fix_toks) => {
-            let y = parse_expr(&mut fix_toks, &mut vec![]).unwrap();
+            let y = parse_expr(&mut fix_toks, &mut vec![], &SumTypeDefs::new()).unwrap();
             App(Box::new(y), Box::new(Lambda(Box::new(value), name)))
         },
         _ => panic!()
