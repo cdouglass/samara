@@ -7,6 +7,7 @@ use interpret::lex::expr::Token;
 use interpret::lex::expr::Keyword::*;
 
 use interpret::structures::Atom;
+use interpret::structures::Constructor;
 use interpret::structures::Op;
 use interpret::structures::Term;
 
@@ -73,9 +74,7 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             },
             Some(Token::Constructor(s)) => {
                 tokens.next();
-                //TODO look up
-                //TODO hold a value
-                Ok(Term::Sum(s))
+                Ok(Term::Sum(Constructor{name: s}, None))
             },
             Some(Token::Identifier(s)) => {
                 tokens.next();
@@ -159,6 +158,7 @@ mod tests {
     use interpret::lex::TokenStream as TS;
     use interpret::lex::expr::TokenStream;
     use interpret::structures::Atom;
+    use interpret::structures::Constructor;
     use interpret::structures::Term;
 
     fn assert_parse(expr: &str, expected: Term) {
@@ -215,6 +215,22 @@ mod tests {
     #[test]
     fn test_parses_unit() {
         assert_parse("()", Term::Atom(Atom::Unit));
+    }
+
+    #[test]
+    fn test_parses_constructor() {
+        let mut token_stream = match build_lexer("Foo") {
+            TS::Expr(ts) => ts,
+            _ => panic!()
+        };
+        let ast = parse(&mut token_stream, &mut vec![], &mut vec![]).unwrap();
+        let expected = Term::Sum(Constructor::new("Foo"), None);
+        assert_eq!(ast, expected);
+    }
+
+    #[test]
+    fn test_invalid_constructor() {
+        assert_parse_err("Foo", "Unknown constructor Foo");
     }
 
     #[test]
