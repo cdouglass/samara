@@ -86,7 +86,18 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
     match tokens.next() {
         Some(Token::Open) => {
             token_stack.push(Token::Open);
-            return parse_type(tokens, &mut token_stack, vars, sum_types);
+            typ = parse_type(tokens, &mut token_stack, vars, sum_types)?;
+
+            match (tokens.peek().cloned(), token_stack.last().cloned()) {
+                (Some(Token::Close), Some(Token::Open)) => {
+                    token_stack.pop();
+                    tokens.next();
+                },
+                (Some(Token::Close), _) => {
+                    return Err(String::from(format!("Unexpected token {:?} in right-hand side of type declaration", Token::Close)));
+                },
+                _ => { }
+            }
         },
         Some(Token::Bool) => {
             typ = Type::Bool;
@@ -141,7 +152,6 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
         },
         Some(Token::Close) => {
             if let Some(Token::Open) = token_stack.pop() {
-                token_stack.pop();
                 tokens.next();
             } else {
                 return Err(String::from(format!("Unexpected token {:?} in right-hand side of type declaration", Token::Close)));
@@ -218,6 +228,7 @@ mod tests {
         assert_parses_type("Int -> Bool", arrow(Type::Int, Type::Bool));
         assert_parses_type("Int -> Bool -> Int", arrow(Type::Int, (arrow(Type::Bool, Type::Int))));
         assert_parses_type("(Int -> Bool) -> Int", arrow(arrow(Type::Int, Type::Bool), Type::Int));
+        assert_parses_type("Int -> (Int -> Bool) -> Int", arrow(Type::Int, arrow(arrow(Type::Int, Type::Bool), Type::Int)));
         assert_parses_type("((Int -> Bool) -> ()) -> Int", arrow(arrow(arrow(Type::Int, Type::Bool), Type::Unit), Type::Int));
     }
 
