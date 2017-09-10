@@ -1,5 +1,6 @@
 mod lex;
 use self::lex::build_lexer;
+use self::lex::build_lexer_decl;
 use self::lex::TokenStream;
 
 mod structures;
@@ -9,9 +10,12 @@ use self::structures::Op::*;
 use self::structures::Term;
 use self::structures::Term::*;
 use self::structures::Type;
+use self::structures::sums::SumTypeScheme;
+pub use self::structures::sums::SumTypeDefs;
 
 mod parse;
 use self::parse::parse_expr;
+use self::parse::parse_decl;
 
 pub mod infer;
 use self::infer::infer_type;
@@ -28,6 +32,18 @@ pub fn type_of(expr: &str, bindings: &[LetBinding], mut gen: &mut GenTypeVar) ->
             (Ok(term), typ)
         },
         Err(msg) => (Err(msg), Err(String::from("Syntax error")))
+    }
+}
+
+pub fn declare_sum_type(decl: &str, mut gen: &mut GenTypeVar, mut sum_types: &mut SumTypeDefs) -> Result<SumTypeScheme, String> {
+    match build_lexer_decl(decl) {
+        TokenStream::Decl(mut tokens) => {
+            let sum_type_scheme = parse_decl(&mut tokens, gen, sum_types)?;
+            let variants = sum_type_scheme.variants.iter().cloned().collect();
+            sum_types.add_type(&sum_type_scheme.name, variants, sum_type_scheme.universals.clone())?;
+            Ok(sum_type_scheme)
+        },
+        _ => panic!()
     }
 }
 

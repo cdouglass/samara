@@ -36,10 +36,12 @@ fn get_command(input: &str) -> Option<Command> {
 }
 
 fn main() {
+    use interpret::SumTypeDefs;
     use interpret::infer::GenTypeVar;
     println!("{}", GREETING);
     let mut bindings = vec![];
     let mut gen_type_var = GenTypeVar::new();
+    let mut sum_type_defs = SumTypeDefs::new();
 
     loop {
         print!("{}", PROMPT);
@@ -75,11 +77,18 @@ fn main() {
             }
             Some(Command::Unknown) => println!("Unknown command"),
             None => {
-
-                let result = interpret::evaluate(&expr, &mut bindings, &mut gen_type_var);
-                match result {
-                    Ok(term) => println!("{:?}", term),
-                    Err(msg) => println!("{}", msg)
+                if let "type " = &expr[0..5] {
+                    let new_sum_type = interpret::declare_sum_type(&expr[5..], &mut gen_type_var, &mut sum_type_defs);
+                    match new_sum_type {
+                        Ok(sum) => println!("{:?}", sum),
+                        Err(msg) => println!("{:?}", msg)
+                    }
+                } else {
+                    let result = interpret::evaluate(&expr, &mut bindings, &mut gen_type_var);
+                    match result {
+                        Ok(term) => println!("{:?}", term),
+                        Err(msg) => println!("{}", msg)
+                    }
                 }
             }
         }
