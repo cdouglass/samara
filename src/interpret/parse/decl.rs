@@ -258,11 +258,19 @@ mod tests {
     fn test_extra_close_paren() {
         let mut sum_types = SumTypeDefs::new();
         sum_types.add_type("Foo", HashSet::new(), vec![]);
-        let err = parse_type(&mut build_lexer("Foo ())"), &mut vec![], &HashMap::new(), &sum_types).unwrap_err();
-        assert_eq!(&err, "Unexpected CLOSE delimiter");
+        let err = parse_type(&mut build_lexer("Int -> (Int -> Int)) -> Int"), &mut vec![], &HashMap::new(), &sum_types).unwrap_err();
+        assert_eq!(&err, "Unexpected token Close in right-hand side of type declaration");
     }
 
     /* Test parse_variant */
+
+    #[test]
+    fn test_extra_close_paren_in_variant() {
+        let mut sum_types = SumTypeDefs::new();
+        sum_types.add_type("Foo", HashSet::new(), vec![]);
+        let err = parse_variant(&mut build_lexer("Foo ())"), &HashMap::new(), &sum_types).unwrap_err();
+        assert_eq!(&err, "Unexpected token Close in right-hand side of type declaration");
+    }
 
     #[test]
     fn test_rejects_extra_eq() {
