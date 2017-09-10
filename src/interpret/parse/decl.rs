@@ -68,6 +68,7 @@ fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, 
 
     match tokens.peek().cloned() {
         Some(Token::Separator) => { tokens.next(); },
+        Some(Token::Sum(_)) => { },
         Some(tok) => {
             return Err(String::from(format!("Unexpected token {:?} in right-hand side of type declaration", tok)));
         }
@@ -155,7 +156,6 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
 }
 
 fn get_sum(mut tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, String> {
-    println!("{:?}", tokens.peek());
     match tokens.next() {
         Some(Token::Sum(s)) => Ok(s),
         _ => Err(String::from(msg))
@@ -255,15 +255,6 @@ mod tests {
     */
 
     #[test]
-    fn test_rejects_extra_eq() {
-        let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("Foo", HashSet::new(), vec![]);
-        let msg = "Unexpected token = in right-hand side of type declaration";
-        let err = parse_type(&mut build_lexer("Foo = Foo = |"), &mut vec![], &HashMap::new(), &sum_types).unwrap_err();
-        assert_eq!(&err, msg)
-    }
-
-    #[test]
     fn test_extra_close_paren() {
         let mut sum_types = SumTypeDefs::new();
         sum_types.add_type("Foo", HashSet::new(), vec![]);
@@ -272,6 +263,15 @@ mod tests {
     }
 
     /* Test parse_variant */
+
+    #[test]
+    fn test_rejects_extra_eq() {
+        let mut sum_types = SumTypeDefs::new();
+        sum_types.add_type("Foo", HashSet::new(), vec![]);
+        let msg = "Unexpected token Eql in right-hand side of type declaration";
+        let err = parse_variant(&mut build_lexer("Foo = Foo = |"), &HashMap::new(), &sum_types).unwrap_err();
+        assert_eq!(&err, msg)
+    }
 
     #[test]
     fn test_parses_constructor_name() {
