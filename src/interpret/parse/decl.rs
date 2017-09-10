@@ -66,80 +66,89 @@ fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, 
         return Err(String::from("Unexpected end of input"));
     }
 
+    match tokens.peek().cloned() {
+        Some(Token::Separator) => { tokens.next(); },
+        Some(tok) => {
+            return Err(String::from(format!("Unexpected token {:?} in right-hand side of type declaration", tok)));
+        }
+        None => { }
+    }
+
     Ok((Constructor{name: name}, typ))
 }
 
 fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<Type, String> {
 
-    let mut typ = None;
+    let mut typ : Type;
 
-    loop {
-        match tokens.next() {
-            Some(Token::Open) => {
-                token_stack.push(Token::Open);
-            },
-            Some(Token::Close) => {
-                match token_stack.pop() {
-                    Some(_) => { break; },
-                    None => {
-                        return Err(String::from("Unexpected CLOSE delimiter"));
+    // ONLY time not to return early is OPEN, Arrow, or Sum
+    match tokens.next() {
+        Some(Token::Open) => {
+            token_stack.push(Token::Open);
+            return parse_type(tokens, &mut token_stack, vars, sum_types);
+        },
+        Some(Token::Bool) => {
+            typ = Type::Bool;
+        },
+        Some(Token::Int) => {
+            typ = Type::Int;
+        },
+        Some(Token::Unit) | None => {
+            typ = Type::Unit;
+        },
+        Some(Token::Sum(ref s)) => {
+            match sum_types.type_from_name(s) {
+                Some(t) => {
+                    let mut parameters = vec![];
+                    while parameters.len() < t.universals.len() {
+                        //TODO this will fill up with Units - is that a problem?
+                        let param = parse_type(tokens, token_stack, vars, sum_types)?;
+                        parameters.push(param);
                     }
+                    typ = t.apply(parameters)?;
+                },
+                None => {
+                    return Err(String::from(format!("Undeclared sum type {}", s)));
                 }
-            },
-            Some(Token::Eql) => {
-                return Err(String::from("Unexpected token = in right-hand side of type declaration"));
-            },
-            Some(Token::Arrow) => {
-                match typ {
-                    Some(input_type) => {
-                        let output_type = parse_type(tokens, token_stack, vars, sum_types)?;
-                        typ = Some(arrow(input_type, output_type));
-                    },
-                    None => {
-                        return Err(String::from("Unexpected token ->. Must come between input and output types."));
-                    }
+            }
+        },
+        Some(Token::Var(ref s)) => {
+            match vars.get(s) {
+                Some(t) => {
+                    typ = t.clone();
+                },
+                None => {
+                    return Err(String::from(format!("Undeclared type variable {} in right-hand side of type declaration", s)));
                 }
-
-            },
-            Some(Token::Bool) => {
-                typ = Some(Type::Bool);
-            },
-            Some(Token::Int) => {
-                typ = Some(Type::Int);
-            },
-            Some(Token::Unit) => {
-                typ = Some(Type::Unit);
-            },
-            Some(Token::Sum(ref s)) => {
-                match sum_types.type_from_name(s) {
-                    Some(t) => {
-                        //TODO get vector of params
-                        //TODO handle non-nullary type operators
-                        typ = Some(t.apply(vec![])?);
-                    },
-                    None => {
-                        return Err(String::from(format!("Undeclared sum type {}", s)));
-                    }
-                }
-            },
-            Some(Token::Var(ref s)) => {
-                match vars.get(s) {
-                    Some(t) => {
-                        typ = Some(t.clone());
-                    },
-                    None => {
-                        return Err(String::from(format!("Undeclared type variable {} in right-hand side of type declaration", s)));
-                    }
-                }
-            },
-            Some(Token::Separator) | None => { break; },
+            }
+        },
+        Some(tok) => {
+            return Err(String::from(format!("Unexpected token {:?} in right-hand side of type declaration", tok)));
         }
     }
 
-    match typ {
-        Some(t) => Ok(t),
-        None => Ok(Type::Unit)
+    //TODO test case for invalid sequence of types, eg Int Int
+    match tokens.peek().cloned() {
+        Some(Token::Arrow) => {
+            tokens.next();
+            let input_type = typ.clone();
+            let output_type = parse_type(tokens, &mut token_stack, vars, sum_types)?;
+            typ = arrow(input_type, output_type);
+        },
+        Some(Token::Close) => {
+            if let Some(Token::Open) = token_stack.last().cloned() {
+                token_stack.pop();
+                tokens.next();
+            } else {
+                return Err(String::from(format!("Unexpected token {:?} in right-hand side of type declaration", Token::Close)));
+            }
+        },
+        _ => { }
     }
+
+    // inside loop: BREAK on separator; BREAK on Close if matches pop
+
+    Ok(typ)
 }
 
 fn get_sum(mut tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, String> {
