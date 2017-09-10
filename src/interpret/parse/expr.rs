@@ -75,7 +75,11 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             },
             Some(Token::Constructor(s)) => {
                 tokens.next();
-                Ok(Term::Sum(Constructor{name: s}, None))
+                let constructor = Constructor{name: s};
+                match sum_types.type_of(constructor.clone()) {
+                    Ok(_) => Ok(Term::Sum(constructor, None)),
+                    Err(_) => Err(String::from(format!("Unknown constructor {}", constructor.name)))
+                }
             },
             Some(Token::Identifier(s)) => {
                 tokens.next();
@@ -154,6 +158,8 @@ fn parse_let(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::parse;
     use interpret::SumTypeDefs;
     use interpret::lex::build_lexer;
@@ -162,6 +168,7 @@ mod tests {
     use interpret::structures::Atom;
     use interpret::structures::Constructor;
     use interpret::structures::Term;
+    use interpret::structures::Type;
 
     fn assert_parse(expr: &str, expected: Term) {
         let mut token_stack = vec![];
@@ -224,6 +231,9 @@ mod tests {
     #[test]
     fn test_parses_constructor() {
         let mut sum_types = SumTypeDefs::new();
+        let mut constructors = HashSet::new();
+        constructors.insert((Constructor::new("Foo"), Type::Unit));
+        sum_types.add_type("Bar", constructors, vec![]);
         let mut token_stream = match build_lexer("Foo") {
             TS::Expr(ts) => ts,
             _ => panic!()
