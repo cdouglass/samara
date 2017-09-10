@@ -142,7 +142,6 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
         }
     }
 
-    //TODO test case for invalid sequence of types, eg Int Int
     match tokens.peek().cloned() {
         Some(Token::Arrow) => {
             tokens.next();
@@ -159,8 +158,6 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
         },
         _ => { }
     }
-
-    // inside loop: BREAK on separator; BREAK on Close if matches pop
 
     Ok(typ)
 }
@@ -253,15 +250,26 @@ mod tests {
         assert_eq!(&err, msg)
     }
 
+
+    #[test]
+    fn test_parses_nested_type() {
+        let mut variants = HashSet::new();
+        let c1 = (Constructor::new("Just"), Type::TypeVar(0));
+        let c2 = (Constructor::new("Nothing"), Type::Unit);
+        variants.insert(c1);
+        variants.insert(c2);
+        let mut sum_types = SumTypeDefs::new();
+        sum_types.add_type("Maybe", variants.clone(), vec![0]);
+
+        let maybe = SumTypeScheme::new("Maybe", variants, vec![0]);
+        let expected = maybe.apply(vec![maybe.apply(vec![Type::Int]).unwrap()]).unwrap();
+        assert_parses_type_with_context("Maybe (Maybe Int)", expected, &sum_types);
+    }
+
     /*
     #[test]
     fn test_freshly_instantiates_polymorphic_sum_type() {
     //TODO is this really what I want?
-    }
-
-    #[test]
-    fn test_parses_nested_type() {
-        //TODO
     }
     */
 
@@ -300,6 +308,15 @@ mod tests {
 
         let variant = parse_variant(&mut tokens, &HashMap::new(), &SumTypeDefs::new()).unwrap();
         assert_eq!(&variant.0.name, "Full");
+    }
+
+    #[test]
+    fn test_applying_non_operator_to_type() {
+        let mut sum_types = SumTypeDefs::new();
+        sum_types.add_type("Foo", HashSet::new(), vec![]);
+        let msg = "Unexpected token Int in right-hand side of type declaration";
+        let err = parse_variant(&mut build_lexer("Foo Int Int"), &HashMap::new(), &sum_types).unwrap_err();
+        assert_eq!(&err, msg)
     }
 
     /* Test parse */
