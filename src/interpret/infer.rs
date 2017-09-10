@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::Iterator;
 
+use interpret::SumTypeDefs;
 use interpret::structures::arrow;
 use interpret::structures::Atom;
 use interpret::structures::LetBinding;
@@ -10,7 +11,7 @@ use interpret::structures::Term;
 use interpret::structures::Type;
 use interpret::structures::Type::*;
 
-pub fn infer_type(term: &Term, bindings: &[LetBinding], mut gen: &mut GenTypeVar) -> Result<Type, String> {
+pub fn infer_type(term: &Term, bindings: &[LetBinding], mut gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<Type, String> {
     let mut context = vec![];
 
     for b in bindings {
@@ -18,7 +19,7 @@ pub fn infer_type(term: &Term, bindings: &[LetBinding], mut gen: &mut GenTypeVar
         context.push((b.typ.clone(), universals));
     }
 
-    let (mut typ, constraints) = get_constraints(term, &mut context, &mut gen)?;
+    let (mut typ, constraints) = get_constraints(term, &mut context, &mut gen, sum_types)?;
     let substitution = unify(constraints)?;
     apply_substitution(&substitution, &mut typ);
     Ok(typ)
@@ -49,12 +50,12 @@ fn instantiate(mut typ: Type, universals: &HashSet<usize>, mut gen: &mut GenType
     typ
 }
 
-fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar) -> Result<(Type, Vec<(Type, Type)>), String> {
+fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<(Type, Vec<(Type, Type)>), String> {
     match *term {
         Term::Atom(ref atom) => Ok((base_type(atom), vec![])),
         Term::App(ref left, ref right) => {
-            let (left_type, left_constraints) = get_constraints(left, &mut context, gen)?;
-            let (right_type, right_constraints) = get_constraints(right, &mut context, gen)?;
+            let (left_type, left_constraints) = get_constraints(left, &mut context, gen, sum_types)?;
+            let (right_type, right_constraints) = get_constraints(right, &mut context, gen, sum_types)?;
             let a = gen.next().unwrap();
             let b = gen.next().unwrap();
             let mut constraints = left_constraints;
@@ -66,7 +67,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
         },
         Term::Lambda(ref body, _) => {
             context.push((gen.next().unwrap(), HashSet::new()));
-            let (body_type, body_constraints) = get_constraints(body, &mut context, gen)?;
+            let (body_type, body_constraints) = get_constraints(body, &mut context, gen, sum_types)?;
             Ok((arrow(context.pop().unwrap().0, body_type), body_constraints))
         },
         Term::Var(ref n, _) => {
@@ -75,9 +76,9 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             Ok((fresh_typ, vec![]))
         },
         Term::Conditional(ref pred, ref true_case, ref false_case) => {
-            let (pred_type, pred_constraints) = get_constraints(pred, &mut context, gen)?;
-            let (true_type, true_constraints) = get_constraints(true_case, &mut context, gen)?;
-            let (false_type, false_constraints) = get_constraints(false_case, &mut context, gen)?;
+            let (pred_type, pred_constraints) = get_constraints(pred, &mut context, gen, sum_types)?;
+            let (true_type, true_constraints) = get_constraints(true_case, &mut context, gen, sum_types)?;
+            let (false_type, false_constraints) = get_constraints(false_case, &mut context, gen, sum_types)?;
             let mut constraints = pred_constraints;
             constraints.extend(true_constraints);
             constraints.extend(false_constraints);
@@ -90,17 +91,17 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             context.push((gen.next().unwrap(), HashSet::new()));
             match *body {
                 None =>  {
-                    let (value_type, value_constraints) = get_constraints(value, &mut context, gen)?;
+                    let (value_type, value_constraints) = get_constraints(value, &mut context, gen, sum_types)?;
                     Ok((value_type, value_constraints))
                 },
                 Some(ref b) => {
-                    let (mut value_type, value_constraints) = get_constraints(value, &mut context, gen)?;
+                    let (mut value_type, value_constraints) = get_constraints(value, &mut context, gen, sum_types)?;
                     let value_sub = unify(value_constraints.clone())?;
                     apply_substitution(&value_sub, &mut value_type);
                     let universals = type_vars_free_in(&value_type);
 
                     context.push((value_type, universals));
-                    let result = get_constraints(b, &mut context, gen)?;
+                    let result = get_constraints(b, &mut context, gen, sum_types)?;
                     context.pop();
                     Ok(result)
                 }
@@ -227,8 +228,8 @@ mod tests {
         Term::App(Box::new(func), Box::new(arg))
     }
 
-    fn assert_type_with_context(expr: &Term, t: &Type, bindings: &[LetBinding], gen: &mut GenTypeVar) {
-        match infer_type(expr, bindings, gen) {
+    fn assert_type_with_context(expr: &Term, t: &Type, bindings: &[LetBinding], gen: &mut GenTypeVar, sum_types: &SumTypeDefs) {
+        match infer_type(expr, bindings, gen, sum_types) {
             Ok(t1) => assert_eq!(t1, *t),
             Err(msg) => {
                 println!("Expected type {:?} but got error {:?}", t, msg);
@@ -237,10 +238,21 @@ mod tests {
         }
     }
 
+    fn assert_type_err_with_context(expr: &Term, expected: &str, bindings: &[LetBinding], gen: &mut GenTypeVar, sum_types: &SumTypeDefs) {
+        match infer_type(expr, bindings, gen, sum_types) {
+            Ok(t1) => {
+                println!("Expected type error {:?} but got type {:?}", expected, t1);
+                panic!()
+            },
+            Err(msg) => assert_eq!(&msg, expected)
+        }
+    }
+
     fn assert_type(expr: &Term, t: &Type) {
         let bindings = vec![];
         let mut gen = GenTypeVar::new();
-        match infer_type(expr, &bindings, &mut gen) {
+        let sum_types = SumTypeDefs::new();
+        match infer_type(expr, &bindings, &mut gen, &sum_types) {
             Ok(t1) => assert_eq!(t1, *t),
             Err(msg) => {
                 println!("Expected type {:?} but got error {:?}", t, msg);
@@ -252,7 +264,8 @@ mod tests {
     fn assert_type_err(expr: &Term, s: &str) {
         let bindings = vec![];
         let mut gen = GenTypeVar::new();
-        match infer_type(expr, &bindings, &mut gen) {
+        let sum_types = SumTypeDefs::new();
+        match infer_type(expr, &bindings, &mut gen, &sum_types) {
             Err(msg) => assert_eq!(&msg, s),
             Ok(t) => {
                 println!("Expected type error {:?} but got type {:?}", s, t);
@@ -381,8 +394,37 @@ mod tests {
         let mut sum_types = SumTypeDefs::new();
         evaluate("let id = (\\x -> x)", &mut bindings, &mut gen, &sum_types).unwrap();
         let x = Term::Var(0, String::new());
-        assert_type_with_context(&x, &arrow(TypeVar(3), TypeVar(3)), &bindings, &mut gen);
-        assert_type_with_context(&x, &arrow(TypeVar(4), TypeVar(4)), &bindings, &mut gen);
-        assert_type_with_context(&x, &arrow(TypeVar(5), TypeVar(5)), &bindings, &mut gen);
+        assert_type_with_context(&x, &arrow(TypeVar(3), TypeVar(3)), &bindings, &mut gen, &sum_types);
+        assert_type_with_context(&x, &arrow(TypeVar(4), TypeVar(4)), &bindings, &mut gen, &sum_types);
+        assert_type_with_context(&x, &arrow(TypeVar(5), TypeVar(5)), &bindings, &mut gen, &sum_types);
+    }
+
+    #[test]
+    fn test_nullary_constructor() {
+        use interpret::SumTypeDefs;
+        use interpret::structures::sums::SumType;
+        use interpret::structures::Constructor;
+        let mut gen = GenTypeVar::new();
+        let mut sum_types = SumTypeDefs::new();
+        let mut variants = HashSet::new();
+        variants.insert((Constructor::new("Foo"), Unit));
+        sum_types.add_type("Baz", variants, vec![]);
+
+        let term = Term::Sum(Constructor::new("Foo"), None);
+        let typ = Sum(SumType{name: String::from("Baz"), variants: vec![(Constructor::new("Foo"), Unit)]});
+        assert_type_with_context(&term, &typ, &vec![], &mut gen, &sum_types);
+
+        let invalid_0 = Term::Sum(Constructor::new("Foo"), Some(Box::new(FIVE)));
+        let expected = format!("Type error: {:?} != Int -> t1", typ);
+        assert_type_err_with_context(&invalid_0, &expected, &vec![], &mut gen, &sum_types);
+
+        let invalid_1 = Term::App(Box::new(Term::Sum(Constructor::new("Foo"), None)), Box::new(FIVE));
+        assert_type_err_with_context(&invalid_1, &expected, &vec![], &mut gen, &sum_types);
+    }
+
+    #[test]
+    fn test_unary_constructor() {
+        //TODO alone
+        //TODO with argument
     }
 }

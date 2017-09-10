@@ -28,7 +28,7 @@ pub fn type_of(expr: &str, bindings: &[LetBinding], mut gen: &mut GenTypeVar, su
     let ast = parse_from_str(expr, bindings, sum_types);
     match ast {
         Ok(term) =>{
-            let typ = infer_type(&term, bindings, &mut gen);
+            let typ = infer_type(&term, bindings, &mut gen, sum_types);
             (Ok(term), typ)
         },
         Err(msg) => (Err(msg), Err(String::from("Syntax error")))
