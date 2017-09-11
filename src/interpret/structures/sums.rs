@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use std::fmt;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
 use interpret::structures::arrow;
 use interpret::structures::Atom;
@@ -79,7 +82,6 @@ impl SumTypeDefs {
     }
 }
 
-#[derive(Debug)]
 #[derive(Clone)]
 #[derive(Eq)]
 #[derive(PartialEq)]
@@ -95,6 +97,13 @@ impl SumType {
         let mut ctor_vec = constructors.clone();
         ctor_vec.sort_by_key(|x| x.0.clone());
         SumType{name: String::from(name), variants: ctor_vec, params: params}
+    }
+}
+
+impl Debug for SumType {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let param_string = self.params.iter().fold(String::new(), |acc, next| acc + &format!(" {:?}", next));
+        write!(f, "{}{}", self.name, param_string)
     }
 }
 
