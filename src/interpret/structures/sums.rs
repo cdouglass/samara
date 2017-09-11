@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use interpret::infer::apply_substitution;
 use interpret::structures::arrow;
 use interpret::structures::Atom;
 use interpret::structures::Term;
@@ -62,12 +61,11 @@ impl SumTypeDefs {
             if let Unit = t {
                 let term = Term::Sum(c.clone(), Box::new(Term::Atom(Atom::Unit)));
                 //TODO don't unwrap
-                let typ = new_typ.apply(params.clone()).unwrap();
-                let binding = ConstructorBinding{tag: c, term: term, typ: typ};
+                let binding = ConstructorBinding{tag: c, term: term, typ: Type::Sum(new_typ.clone())};
                 self.bindings.push(binding);
             } else {
                 let term = Term::Lambda(Box::new(Term::Sum(c.clone(), Box::new(Term::Var(0, String::from("x"))))), c.clone());
-                let typ = arrow(t, new_typ.apply(params.clone()).unwrap());
+                let typ = arrow(t, Type::Sum(new_typ.clone()));
                 let binding = ConstructorBinding{tag: c, term: term, typ: typ};
                 self.bindings.push(binding);
             }
@@ -98,26 +96,6 @@ impl SumType {
         ctor_vec.sort_by_key(|x| x.0.clone());
         SumType{name: String::from(name), variants: ctor_vec, params: params}
     }
-
-    pub fn apply(&self, parameters: Vec<Type>) -> Result<Type, String> {
-        if self.params.len() != parameters.len() {
-            Err(String::from(format!("Type operator {} requires exactly {} parameter(s), got {}: {:?}", self.name, self.params.len(), parameters.len(), parameters)))
-        } else {
-            let mut substitution = HashMap::new();
-            for (ref a, ref b) in self.params.iter().cloned().zip(parameters.iter().cloned()) {
-                if let TypeVar(n) = *a {
-                    substitution.insert(n, b.clone());
-                }
-            }
-            let mut variants = vec![];
-            for &(ref constructor, ref typ) in &self.variants {
-                let mut t = typ.clone();
-                apply_substitution(&substitution, &mut t);
-                variants.push((constructor.clone(), t));
-            }
-            Ok(Type::Sum(SumType{name: self.name.clone(), variants: variants, params: parameters}))
-        }
-    }
 }
 
 #[cfg(test)]
@@ -137,50 +115,6 @@ mod tests {
         variants.push((String::from("Bar"), Bool));
         variants.push((String::from("Foo"), Int));
         variants
-    }
-
-    /* Test SumType */
-
-    #[test]
-    fn test_apply_sum_type_to_wrong_number_of_args() {
-        let sum_type = SumType::new("Maybe", maybe(), vec![TypeVar(0)]);
-        let err = sum_type.apply(vec![Type::Int, Type::Bool]).unwrap_err();
-        assert_eq!(&err, "Type operator Maybe requires exactly 1 parameter(s), got 2: [Int, Bool]");
-
-        let sum_type = SumType::new("Bar", bar(), vec![]);
-        let err = sum_type.apply(vec![Type::Int, Type::Bool]).unwrap_err();
-        assert_eq!(&err, "Type operator Bar requires exactly 0 parameter(s), got 2: [Int, Bool]");
-    }
-
-    #[test]
-    fn test_apply_nullary_sum_type() {
-        let typ = SumType::new("Bar", bar(), vec![]).apply(vec![]).unwrap();
-        let mut variants = vec![];
-        variants.push((String::from("Bar"), Bool));
-        variants.push((String::from("Foo"), Int));
-        let expected = Type::Sum(SumType{name: String::from("Bar"), variants: variants, params: vec![]});
-        assert_eq!(typ, expected);
-    }
-
-    #[test]
-    fn test_apply_unary_sum_type() {
-        let typ = SumType::new("Maybe", maybe(), vec![TypeVar(0)]).apply(vec![Type::Int]).unwrap();
-        let variants = vec![(String::from("Just"), Type::Int), (String::from("None"), Type::Unit)];
-        let expected = Type::Sum(SumType{name: String::from("Maybe"), variants: variants, params: vec![Type::Int]});
-        assert_eq!(typ, expected);
-    }
-
-    #[test]
-    fn test_apply_binary_sum_type() {
-        let mut variants = vec![];
-        variants.push((String::from("Left"), Type::TypeVar(0)));
-        variants.push((String::from("Right"), Type::TypeVar(1)));
-        let scheme = SumType::new("Either", variants, vec![TypeVar(0), TypeVar(1)]);
-
-        let typ = scheme.apply(vec![Type::Int, Type::Bool]).unwrap();
-        let expected_variants = vec![(String::from("Left"), Type::Int), (String::from("Right"), Type::Bool)];
-        let expected = Type::Sum(SumType{name: String::from("Either"), variants: expected_variants, params: vec![Type::Int, Type::Bool]});
-        assert_eq!(typ, expected);
     }
 
     /* Test SumTypeDefs */
@@ -218,8 +152,8 @@ mod tests {
 
         let maybe_type = SumType::new("Maybe", maybe(), vec![TypeVar(0)]);
         let bar_type = SumType::new("Bar", bar(), vec![]);
-        assert_eq!(defs.type_info(String::from("Just")), Ok((maybe_type.clone(), arrow(TypeVar(0), maybe_type.apply(vec![TypeVar(0)]).unwrap()))));
-        assert_eq!(defs.type_info(String::from("Foo")), Ok((bar_type.clone(), arrow(Int, bar_type.apply(vec![]).unwrap()))));
+        assert_eq!(defs.type_info(String::from("Just")), Ok((maybe_type.clone(), arrow(TypeVar(0), Type::Sum(maybe_type)))));
+        assert_eq!(defs.type_info(String::from("Foo")), Ok((bar_type.clone(), arrow(Int, Type::Sum(bar_type)))));
 
         match defs.type_info(String::from("Baz")) {
             Ok(_) => panic!(),

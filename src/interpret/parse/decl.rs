@@ -102,7 +102,9 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
                         let param = parse_type(tokens, token_stack, vars, sum_types)?;
                         parameters.push(param);
                     }
-                    typ = t.apply(parameters)?;
+                    let mut new_typ = t.clone();
+                    new_typ.params = parameters;
+                    typ = Type::Sum(new_typ);
                 },
                 None => {
                     return Err(String::from(format!("Undeclared sum type {}", s)));
@@ -213,7 +215,7 @@ mod tests {
 
         let mut sum_types = SumTypeDefs::new();
         sum_types.add_type("MaybeInt", variants, vec![]).unwrap();
-        assert_parses_type_with_context("MaybeInt", maybe_int.apply(vec![]).unwrap(), &sum_types);
+        assert_parses_type_with_context("MaybeInt", Type::Sum(maybe_int), &sum_types);
     }
 
     #[test]
@@ -230,8 +232,11 @@ mod tests {
         sum_types.add_type("Maybe", variants.clone(), vec![TypeVar(0)]).unwrap();
 
         let maybe = SumType::new("Maybe", variants, vec![TypeVar(0)]);
-        let expected = maybe.apply(vec![maybe.apply(vec![Type::Int]).unwrap()]).unwrap();
-        assert_parses_type_with_context("Maybe (Maybe Int)", expected, &sum_types);
+        let mut maybe_int = maybe.clone();
+        maybe_int.params = vec![Type::Int];
+        let mut expected = maybe.clone();
+        expected.params = vec![Type::Sum(maybe_int)];
+        assert_parses_type_with_context("Maybe (Maybe Int)", Type::Sum(expected), &sum_types);
     }
 
     #[test]
