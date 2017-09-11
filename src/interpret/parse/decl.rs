@@ -8,7 +8,6 @@ use interpret::lex::decl::Token;
 use interpret::lex::decl::TokenStream;
 use interpret::structures::arrow;
 use interpret::structures::Type;
-use interpret::structures::sums::Constructor;
 use interpret::structures::sums::SumTypeScheme;
 use interpret::structures::sums::SumTypeDefs;
 
@@ -43,7 +42,7 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_t
     Ok(SumTypeScheme::new(&name, variants, universals))
 }
 
-fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<(Constructor, Type), String> {
+fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<(String, Type), String> {
     let name = get_sum(tokens, "Missing constructor in right-hand side of type declaration")?;
     let mut token_stack = vec![];
     let typ = parse_type(tokens, &mut token_stack, vars, sum_types)?;
@@ -61,7 +60,7 @@ fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, 
         None => { }
     }
 
-    Ok((Constructor{name: name}, typ))
+    Ok((String::from(name), typ))
 }
 
 fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<Type, String> {
@@ -211,8 +210,8 @@ mod tests {
     #[test]
     fn test_parses_nullary_sum_type() {
         let mut variants = HashSet::new();
-        let c1 = (Constructor::new("JustInt"), Type::Int);
-        let c2 = (Constructor::new("Nothing"), Type::Unit);
+        let c1 = (String::from("JustInt"), Type::Int);
+        let c2 = (String::from("Nothing"), Type::Unit);
         variants.insert(c1);
         variants.insert(c2);
         let maybe_int = SumTypeScheme::new("MaybeInt", variants.clone(), vec![]);
@@ -232,8 +231,8 @@ mod tests {
     #[test]
     fn test_parses_nested_type() {
         let mut variants = HashSet::new();
-        let c1 = (Constructor::new("Just"), Type::TypeVar(0));
-        let c2 = (Constructor::new("Nothing"), Type::Unit);
+        let c1 = (String::from("Just"), Type::TypeVar(0));
+        let c2 = (String::from("Nothing"), Type::Unit);
         variants.insert(c1);
         variants.insert(c2);
         let mut sum_types = SumTypeDefs::new();
@@ -275,10 +274,10 @@ mod tests {
     fn test_parses_constructor_name() {
         let mut tokens = build_lexer("Empty | Full");
         let variant = parse_variant(&mut tokens, &HashMap::new(), &SumTypeDefs::new()).unwrap();
-        assert_eq!(&variant.0.name, "Empty");
+        assert_eq!(&variant.0, "Empty");
 
         let variant = parse_variant(&mut tokens, &HashMap::new(), &SumTypeDefs::new()).unwrap();
-        assert_eq!(&variant.0.name, "Full");
+        assert_eq!(&variant.0, "Full");
     }
 
     #[test]

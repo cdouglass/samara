@@ -4,7 +4,6 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 
 pub mod sums;
-pub use self::sums::Constructor;
 
 use self::Op::*;
 
@@ -48,7 +47,7 @@ pub enum Term {
     Var(usize, String),
     Conditional(Box<Term>, Box<Term>, Box<Term>), // predicate, true case, false case
     Let(String, Box<Term>, Option<Box<Term>>), // variable name, value, body (only one binding per let, for now)
-    Sum(Constructor, Option<Box<Term>>)
+    Sum(String, Option<Box<Term>>)
 }
 
 pub struct LetBinding {
@@ -114,8 +113,8 @@ impl Debug for Term {
             },
             Term::Sum(ref constructor, ref value) => {
                 match *value {
-                    Some(ref v) => write!(f, "{} {:?}", constructor.name, v),
-                    None => write!(f, "{}", constructor.name)
+                    Some(ref v) => write!(f, "{} {:?}", constructor, v),
+                    None => write!(f, "{}", constructor)
                 }
             }
         }

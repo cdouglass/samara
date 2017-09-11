@@ -7,7 +7,6 @@ use interpret::lex::expr::Token;
 use interpret::lex::expr::Keyword::*;
 
 use interpret::structures::Atom;
-use interpret::structures::Constructor;
 use interpret::structures::Op;
 use interpret::SumTypeDefs;
 use interpret::structures::Term;
@@ -75,10 +74,9 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             },
             Some(Token::Constructor(s)) => {
                 tokens.next();
-                let constructor = Constructor{name: s};
-                match sum_types.type_info(constructor.clone()) {
-                    Ok(_) => Ok(Term::Sum(constructor, None)),
-                    Err(_) => Err(String::from(format!("Unknown constructor {}", constructor.name)))
+                match sum_types.type_info(s.clone()) {
+                    Ok(_) => Ok(Term::Sum(s, None)),
+                    Err(_) => Err(String::from(format!("Unknown constructor {}", s)))
                 }
             },
             Some(Token::Identifier(s)) => {
@@ -166,7 +164,6 @@ mod tests {
     use interpret::lex::TokenStream as TS;
     use interpret::lex::expr::TokenStream;
     use interpret::structures::Atom;
-    use interpret::structures::Constructor;
     use interpret::structures::Term;
     use interpret::structures::Type;
 
@@ -232,14 +229,14 @@ mod tests {
     fn test_parses_constructor() {
         let mut sum_types = SumTypeDefs::new();
         let mut constructors = HashSet::new();
-        constructors.insert((Constructor::new("Foo"), Type::Unit));
+        constructors.insert((String::from("Foo"), Type::Unit));
         sum_types.add_type("Bar", constructors, vec![]);
         let mut token_stream = match build_lexer("Foo") {
             TS::Expr(ts) => ts,
             _ => panic!()
         };
         let ast = parse(&mut token_stream, &mut vec![], &mut vec![], &sum_types).unwrap();
-        let expected = Term::Sum(Constructor::new("Foo"), None);
+        let expected = Term::Sum(String::from("Foo"), None);
         assert_eq!(ast, expected);
     }
 

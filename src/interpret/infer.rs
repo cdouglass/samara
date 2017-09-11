@@ -426,23 +426,22 @@ mod tests {
     fn test_nullary_constructor() {
         use interpret::SumTypeDefs;
         use interpret::structures::sums::SumType;
-        use interpret::structures::Constructor;
         let mut gen = GenTypeVar::new();
         let mut sum_types = SumTypeDefs::new();
         let mut variants = HashSet::new();
-        variants.insert((Constructor::new("Foo"), Unit));
+        variants.insert((String::from("Foo"), Unit));
         sum_types.add_type("Baz", variants, vec![]);
 
-        let term = Term::Sum(Constructor::new("Foo"), None);
-        let typ = Sum(SumType{name: String::from("Baz"), variants: vec![(Constructor::new("Foo"), Unit)]});
+        let term = Term::Sum(String::from("Foo"), None);
+        let typ = Sum(SumType{name: String::from("Baz"), variants: vec![(String::from("Foo"), Unit)]});
         assert_type_with_context(&term, &typ, &vec![], &mut gen, &sum_types);
 
-        let invalid_0 = Term::Sum(Constructor::new("Foo"), Some(Box::new(FIVE)));
+        let invalid_0 = Term::Sum(String::from("Foo"), Some(Box::new(FIVE)));
         let expected = format!("Type error: {:?} != Int -> t1", typ);
         //TODO
         //assert_type_err_with_context(&invalid_0, &expected, &vec![], &mut gen, &sum_types);
 
-        let invalid_1 = Term::App(Box::new(Term::Sum(Constructor::new("Foo"), None)), Box::new(FIVE));
+        let invalid_1 = Term::App(Box::new(Term::Sum(String::from("Foo"), None)), Box::new(FIVE));
         let expected = format!("Type error: Int -> t2 != {:?}", typ);
         assert_type_err_with_context(&invalid_1, &expected, &vec![], &mut gen, &sum_types);
     }
