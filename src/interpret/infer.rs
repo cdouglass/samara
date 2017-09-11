@@ -115,25 +115,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             let (ref type_scheme, ref input_typ) = sum_types.type_info(constructor.clone())?;
             let (value_type, value_constraints) = get_constraints(value, &mut context, gen, sum_types)?;
             Ok((Unit, vec![]))
-                    //TODO find actual type
-                    //TODO add constraint based on constructor
-                /*
-                 //TODO Term::Constructor
-                None => {
-                    if type_scheme.universals.is_empty() {
-                        let output_typ = type_scheme.apply(vec![])?;
-                        let typ = match *input_typ {
-                            Unit => output_typ,
-                            ref it => arrow(it.clone(), output_typ)
-                        };
-                        Ok((typ, vec![]))
-                    } else {
-                        //TODO write out function type
-                        //TODO instantiate - that is the fiddly bit
-                        Ok((Unit, vec![]))
-                    }
-                }
-                */
+                //TODO
         }
     }
 }
