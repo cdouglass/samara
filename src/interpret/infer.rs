@@ -13,19 +13,24 @@ use interpret::structures::Type::*;
 
 pub fn infer_type(term: &Term, bindings: &[LetBinding], mut gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<Type, String> {
     let mut context = vec![];
+    let mut ctor_bindings = vec![];
 
     for b in bindings {
         let universals = type_vars_free_in(&b.typ);
         context.push((b.typ.clone(), universals));
     }
 
-    let (mut typ, constraints) = get_constraints(term, &mut context, &mut gen, sum_types)?;
+    for cb in &sum_types.bindings {
+        let universals = type_vars_free_in(&cb.typ);
+        ctor_bindings.push((cb.typ.clone(), universals));
+    }
+
+    let (mut typ, constraints) = get_constraints(term, &mut context, &mut gen, &ctor_bindings)?;
     let substitution = unify(constraints)?;
     apply_substitution(&substitution, &mut typ);
     Ok(typ)
 }
 
-//TODO move to structures module
 pub fn apply_substitution(substitution: &HashMap<usize, Type>, typ: &mut Type) {
     match *typ {
         TypeVar(n) => {
@@ -36,6 +41,15 @@ pub fn apply_substitution(substitution: &HashMap<usize, Type>, typ: &mut Type) {
         Arrow(ref mut left, ref mut right) => {
             apply_substitution(substitution, left);
             apply_substitution(substitution, right);
+        },
+        Sum(ref mut sum_type) => {
+            for mut param in sum_type.params.iter_mut() {
+                apply_substitution(substitution, &mut param);
+            }
+
+            for &mut(_, ref mut typ) in sum_type.variants.iter_mut() {
+                apply_substitution(substitution, typ);
+            }
         },
         _ => { }
     }
@@ -50,12 +64,12 @@ fn instantiate(mut typ: Type, universals: &HashSet<usize>, mut gen: &mut GenType
     typ
 }
 
-fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<(Type, Vec<(Type, Type)>), String> {
+fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar, constructor_bindings: &Vec<(Type, HashSet<usize>)>) -> Result<(Type, Vec<(Type, Type)>), String> {
     match *term {
         Term::Atom(ref atom) => Ok((base_type(atom), vec![])),
         Term::App(ref left, ref right) => {
-            let (left_type, left_constraints) = get_constraints(left, &mut context, gen, sum_types)?;
-            let (right_type, right_constraints) = get_constraints(right, &mut context, gen, sum_types)?;
+            let (left_type, left_constraints) = get_constraints(left, &mut context, gen, constructor_bindings)?;
+            let (right_type, right_constraints) = get_constraints(right, &mut context, gen, constructor_bindings)?;
             let a = gen.next().unwrap();
             let b = gen.next().unwrap();
             let mut constraints = left_constraints;
@@ -67,7 +81,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
         },
         Term::Lambda(ref body, _) => {
             context.push((gen.next().unwrap(), HashSet::new()));
-            let (body_type, body_constraints) = get_constraints(body, &mut context, gen, sum_types)?;
+            let (body_type, body_constraints) = get_constraints(body, &mut context, gen, constructor_bindings)?;
             Ok((arrow(context.pop().unwrap().0, body_type), body_constraints))
         },
         Term::Var(ref n, _) => {
@@ -76,9 +90,9 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             Ok((fresh_typ, vec![]))
         },
         Term::Conditional(ref pred, ref true_case, ref false_case) => {
-            let (pred_type, pred_constraints) = get_constraints(pred, &mut context, gen, sum_types)?;
-            let (true_type, true_constraints) = get_constraints(true_case, &mut context, gen, sum_types)?;
-            let (false_type, false_constraints) = get_constraints(false_case, &mut context, gen, sum_types)?;
+            let (pred_type, pred_constraints) = get_constraints(pred, &mut context, gen, constructor_bindings)?;
+            let (true_type, true_constraints) = get_constraints(true_case, &mut context, gen, constructor_bindings)?;
+            let (false_type, false_constraints) = get_constraints(false_case, &mut context, gen, constructor_bindings)?;
             let mut constraints = pred_constraints;
             constraints.extend(true_constraints);
             constraints.extend(false_constraints);
@@ -91,29 +105,31 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             context.push((gen.next().unwrap(), HashSet::new()));
             match *body {
                 None =>  {
-                    let (value_type, value_constraints) = get_constraints(value, &mut context, gen, sum_types)?;
+                    let (value_type, value_constraints) = get_constraints(value, &mut context, gen, constructor_bindings)?;
                     Ok((value_type, value_constraints))
                 },
                 Some(ref b) => {
-                    let (mut value_type, value_constraints) = get_constraints(value, &mut context, gen, sum_types)?;
+                    let (mut value_type, value_constraints) = get_constraints(value, &mut context, gen, constructor_bindings)?;
                     let value_sub = unify(value_constraints.clone())?;
                     apply_substitution(&value_sub, &mut value_type);
                     let universals = type_vars_free_in(&value_type);
 
                     context.push((value_type, universals));
-                    let result = get_constraints(b, &mut context, gen, sum_types)?;
+                    let result = get_constraints(b, &mut context, gen, constructor_bindings)?;
                     context.pop();
                     Ok(result)
                 }
             }
         },
         Term::Constructor(ref n, _) => {
-            let binding = &sum_types.bindings[*n];
-            Ok((binding.typ.clone(), vec![]))
+            let (ref typ, ref universals) = constructor_bindings[*n];
+            let fresh_typ = instantiate(typ.clone(), universals, gen);
+            Ok((fresh_typ, vec![]))
         },
         Term::Sum(ref constructor, ref value) => {
-            let (ref type_scheme, ref input_typ) = sum_types.type_info(constructor.clone())?;
-            let (value_type, value_constraints) = get_constraints(value, &mut context, gen, sum_types)?;
+            //TODO include index in Sum as well, to allow lookup
+            //let (ref type_scheme, ref input_typ) = constructor_bindings.type_info(constructor.clone())?;
+            //let (value_type, value_constraints) = get_constraints(value, &mut context, gen, constructor_bindings)?;
             Ok((Unit, vec![]))
                 //TODO
         }
@@ -430,9 +446,19 @@ mod tests {
         let mut sum_types = SumTypeDefs::new();
         let (t0, t1) = (gen.next().unwrap(), gen.next().unwrap());
         let variants = vec![(String::from("Left"), t0.clone()), (String::from("Right"), t1.clone())];
-        sum_types.add_type("Either", variants, vec![t0, t1]).unwrap();
+        sum_types.add_type("Either", variants, vec![t0.clone(), t1.clone()]).unwrap();
 
-        //TODO test unapplied, just right, and just left
+        let term = Term::App(Box::new(Term::Constructor(0, String::from("Left"))), Box::new(FIVE));
+        let left_concrete_variants = vec![(String::from("Left"), Type::Int), (String::from("Right"), t1.clone())];
+        let expected = Sum(SumType::new("Either", left_concrete_variants, vec![Type::Int, t1]));
+      assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
+
+        let term = Term::App(Box::new(Term::Constructor(1, String::from("Right"))), Box::new(FIVE));
+        let right_concrete_variants = vec![(String::from("Left"), t0.clone()), (String::from("Right"), Type::Int)];
+        let expected = Sum(SumType::new("Either", right_concrete_variants, vec![t0.clone(), Type::Int]));
+        assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
+
+        //fully concrete
         let pred = Term::Atom(Atom::Bool(false));
         let true_case = Term::App(Box::new(Term::Constructor(0, String::from("Left"))), Box::new(FIVE));
         let false_case = Term::App(Box::new(Term::Constructor(1, String::from("Right"))), Box::new(Term::Atom(Atom::Bool(true))));
