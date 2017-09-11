@@ -107,7 +107,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
                 }
             }
         },
-        Term::Constructor(ref constructor) => {
+        Term::Constructor(ref n, ref constructor) => {
             unimplemented!()
         },
         Term::Sum(ref constructor, ref value) => {
@@ -434,7 +434,7 @@ mod tests {
         variants.insert((String::from("Foo"), Unit));
         sum_types.add_type("Baz", variants, vec![]);
 
-        let term = Term::Constructor(String::from("Foo"));
+        let term = Term::Constructor(0, String::from("Foo"));
         let typ = Sum(SumType{name: String::from("Baz"), variants: vec![(String::from("Foo"), Unit)]});
         assert_type_with_context(&term, &typ, &vec![], &mut gen, &sum_types);
 
@@ -443,7 +443,7 @@ mod tests {
         //TODO
         //assert_type_err_with_context(&invalid_0, &expected, &vec![], &mut gen, &sum_types);
 
-        let invalid_1 = Term::App(Box::new(Term::Constructor(String::from("Foo"))), Box::new(FIVE));
+        let invalid_1 = Term::App(Box::new(Term::Constructor(0, String::from("Foo"))), Box::new(FIVE));
         let expected = format!("Type error: Int -> t2 != {:?}", typ);
         assert_type_err_with_context(&invalid_1, &expected, &vec![], &mut gen, &sum_types);
     }

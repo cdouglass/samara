@@ -47,7 +47,7 @@ pub enum Term {
     Var(usize, String),
     Conditional(Box<Term>, Box<Term>, Box<Term>), // predicate, true case, false case
     Let(String, Box<Term>, Option<Box<Term>>), // variable name, value, body (only one binding per let, for now)
-    Constructor(String), // TODO add usize
+    Constructor(usize, String),
     Sum(String, Box<Term>)
 }
 
@@ -112,7 +112,7 @@ impl Debug for Term {
                     None => write!(f, "LET {} = {:?}", name, value)
                 }
             },
-            Term::Constructor(ref constructor) => write!(f, "{}", constructor),
+            Term::Constructor(_, ref constructor) => write!(f, "{}", constructor),
             Term::Sum(ref constructor, ref value) => write!(f, "{} {:?}", constructor, value),
         }
     }
@@ -126,7 +126,6 @@ impl Debug for Type {
             Type::Int => write!(f, "Int"),
             Type::Arrow(ref a, ref b) => write!(f, "{:?} -> {:?}", *a, *b),
             Type::TypeVar(n) => write!(f, "t{:?}", n),
-            //TODO
             Type::Sum(ref s) => write!(f, "{:?}", s)
         }
     }
