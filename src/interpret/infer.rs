@@ -43,11 +43,11 @@ pub fn apply_substitution(substitution: &HashMap<usize, Type>, typ: &mut Type) {
             apply_substitution(substitution, right);
         },
         Sum(ref mut sum_type) => {
-            for mut param in sum_type.params.iter_mut() {
+            for mut param in &mut sum_type.params {
                 apply_substitution(substitution, &mut param);
             }
 
-            for &mut(_, ref mut typ) in sum_type.variants.iter_mut() {
+            for &mut(_, ref mut typ) in &mut sum_type.variants {
                 apply_substitution(substitution, typ);
             }
         },
@@ -64,7 +64,7 @@ fn instantiate(mut typ: Type, universals: &HashSet<usize>, mut gen: &mut GenType
     typ
 }
 
-fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar, constructor_bindings: &Vec<(Type, HashSet<usize>)>) -> Result<(Type, Vec<(Type, Type)>), String> {
+fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar, constructor_bindings: &[(Type, HashSet<usize>)]) -> Result<(Type, Vec<(Type, Type)>), String> {
     match *term {
         Term::Atom(ref atom) => Ok((base_type(atom), vec![])),
         Term::App(ref left, ref right) => {
@@ -165,13 +165,13 @@ fn unify(mut constraints: Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, Str
                 insert_sub(&mut substitution, n, typ);
                 Ok(substitution)
             } else if let (Sum(st1), Sum(st2)) = (s.clone(), t.clone()) {
-                if st1.name != st2.name {
-                    Err(String::from(format!("Type error: {:?} != {:?}", st1.name, st2.name)))
-                } else {
+                if st1.name == st2.name {
                     for (t1, t2) in st1.params.iter().zip(st2.params.iter()) {
                         constraints.push((t1.clone(), t2.clone()));
                     }
                     unify(constraints)
+                } else {
+                    Err(String::from(format!("Type error: {:?} != {:?}", st1.name, st2.name)))
                 }
             } else if let (Arrow(s1, s2), Arrow(t1, t2)) = (s.clone(), t.clone()) {
                 constraints.push((*s1, *t1));

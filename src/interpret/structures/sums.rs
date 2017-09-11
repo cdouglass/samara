@@ -28,19 +28,6 @@ impl SumTypeDefs {
         self.types.get(t).cloned()
     }
 
-    pub fn type_info(&self, constr: String) -> Result<(SumType, Type), String> {
-        for binding in &self.bindings {
-            if binding.tag == constr {
-                let typ = binding.typ.clone();
-                //TODO don't unwrap
-                let type_name = &self.constructors[&constr];
-                let scheme = &self.types[type_name];
-                return Ok((scheme.clone(), typ));
-            }
-        }
-        Err(String::from(format!("Constructor {} does not exist", constr)))
-    }
-
     pub fn add_type(&mut self, name: &str, constructors: Vec<(String, Type)>, params: Vec<Type>) -> Result<(), String> {
 
         for typ in self.types.values() {
@@ -118,13 +105,6 @@ mod tests {
         variants
     }
 
-    fn bar() -> Vec<(String, Type)> {
-        let mut variants = vec![];
-        variants.push((String::from("Bar"), Bool));
-        variants.push((String::from("Foo"), Int));
-        variants
-    }
-
     /* Test SumTypeDefs */
 
     #[test]
@@ -149,23 +129,6 @@ mod tests {
         match defs.add_type("Foo", dup, vec![]) {
             Ok(()) => panic!("Should not allow new sum type that reuses an existing constructor name!"),
             Err(msg) => assert_eq!(&msg, "Ambiguous constructor: None is already defined for type Maybe")
-        }
-    }
-
-    #[test]
-    fn test_find_type_of_constructor() {
-        let mut defs = SumTypeDefs::new();
-        defs.add_type("Maybe", maybe(), vec![TypeVar(0)]).unwrap();
-        defs.add_type("Bar", bar(), vec![]).unwrap();
-
-        let maybe_type = SumType::new("Maybe", maybe(), vec![TypeVar(0)]);
-        let bar_type = SumType::new("Bar", bar(), vec![]);
-        assert_eq!(defs.type_info(String::from("Just")), Ok((maybe_type.clone(), arrow(TypeVar(0), Type::Sum(maybe_type)))));
-        assert_eq!(defs.type_info(String::from("Foo")), Ok((bar_type.clone(), arrow(Int, Type::Sum(bar_type)))));
-
-        match defs.type_info(String::from("Baz")) {
-            Ok(_) => panic!(),
-            Err(msg) => assert_eq!(&msg, "Constructor Baz does not exist")
         }
     }
 }
