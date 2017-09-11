@@ -8,21 +8,21 @@ use interpret::lex::decl::Token;
 use interpret::lex::decl::TokenStream;
 use interpret::structures::arrow;
 use interpret::structures::Type;
-use interpret::structures::sums::SumTypeScheme;
+use interpret::structures::sums::SumType;
 use interpret::structures::sums::SumTypeDefs;
 
-pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<SumTypeScheme, String> {
+pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<SumType, String> {
     let name = get_sum(tokens, "Type declaration must begin with an uppercase name")?;
     let mut type_vars = HashMap::new();
-    let mut variants = HashSet::new();
-    let mut universals = vec![];
+    let mut variants = vec![];
+    let mut params = vec![];
 
     loop {
         match tokens.next() {
             Some(Token::Var(name)) => {
                 let tv = gen.next().unwrap();
-                if let Type::TypeVar(n) = tv {
-                    universals.push(n);
+                if let Type::TypeVar(_) = tv {
+                    params.push(tv.clone());
                 }
                 type_vars.insert(name, tv);
             },
@@ -35,11 +35,11 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_t
 
     loop {
         let variant = parse_variant(tokens, &type_vars, sum_types)?;
-        variants.insert(variant);
+        variants.push(variant);
         if tokens.peek().is_none() { break; }
     }
 
-    Ok(SumTypeScheme::new(&name, variants, universals))
+    Ok(SumType::new(&name, variants, params))
 }
 
 fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<(String, Type), String> {
@@ -99,7 +99,7 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
             match sum_types.type_from_name(s) {
                 Some(t) => {
                     let mut parameters = vec![];
-                    while parameters.len() < t.universals.len() {
+                    while parameters.len() < t.params.len() {
                         //TODO this will fill up with Units - is that a problem?
                         let param = parse_type(tokens, token_stack, vars, sum_types)?;
                         parameters.push(param);
@@ -157,7 +157,8 @@ fn get_sum(mut tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, 
 mod tests {
     use super::*;
     use interpret::structures::arrow;
-    use interpret::structures::sums::SumTypeScheme;
+    use interpret::structures::Type::TypeVar;
+    use interpret::structures::sums::SumType;
     use interpret::infer::GenTypeVar;
     use interpret::lex::decl::build_lexer;
 
@@ -209,12 +210,8 @@ mod tests {
 
     #[test]
     fn test_parses_nullary_sum_type() {
-        let mut variants = HashSet::new();
-        let c1 = (String::from("JustInt"), Type::Int);
-        let c2 = (String::from("Nothing"), Type::Unit);
-        variants.insert(c1);
-        variants.insert(c2);
-        let maybe_int = SumTypeScheme::new("MaybeInt", variants.clone(), vec![]);
+        let mut variants = vec![(String::from("JustInt"), Type::Int), (String::from("Nothing"), Type::Unit)];
+        let maybe_int = SumType::new("MaybeInt", variants.clone(), vec![]);
 
         let mut sum_types = SumTypeDefs::new();
         sum_types.add_type("MaybeInt", variants, vec![]);
@@ -230,15 +227,11 @@ mod tests {
 
     #[test]
     fn test_parses_nested_type() {
-        let mut variants = HashSet::new();
-        let c1 = (String::from("Just"), Type::TypeVar(0));
-        let c2 = (String::from("Nothing"), Type::Unit);
-        variants.insert(c1);
-        variants.insert(c2);
+        let mut variants = vec![(String::from("Just"), Type::TypeVar(0)), (String::from("Nothing"), Type::Unit)];
         let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("Maybe", variants.clone(), vec![0]);
+        sum_types.add_type("Maybe", variants.clone(), vec![TypeVar(0)]);
 
-        let maybe = SumTypeScheme::new("Maybe", variants, vec![0]);
+        let maybe = SumType::new("Maybe", variants, vec![TypeVar(0)]);
         let expected = maybe.apply(vec![maybe.apply(vec![Type::Int]).unwrap()]).unwrap();
         assert_parses_type_with_context("Maybe (Maybe Int)", expected, &sum_types);
     }
@@ -246,7 +239,7 @@ mod tests {
     #[test]
     fn test_extra_close_paren() {
         let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("Foo", HashSet::new(), vec![]);
+        sum_types.add_type("Foo", vec![], vec![]);
         let err = parse_type(&mut build_lexer("Int -> (Int -> Int)) -> Int"), &mut vec![], &HashMap::new(), &sum_types).unwrap_err();
         assert_eq!(&err, "Unexpected token Close in right-hand side of type declaration");
     }
@@ -256,7 +249,7 @@ mod tests {
     #[test]
     fn test_extra_close_paren_in_variant() {
         let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("Foo", HashSet::new(), vec![]);
+        sum_types.add_type("Foo", vec![], vec![]);
         let err = parse_variant(&mut build_lexer("Foo ())"), &HashMap::new(), &sum_types).unwrap_err();
         assert_eq!(&err, "Unexpected token Close in right-hand side of type declaration");
     }
@@ -264,7 +257,7 @@ mod tests {
     #[test]
     fn test_rejects_extra_eq() {
         let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("Foo", HashSet::new(), vec![]);
+        sum_types.add_type("Foo", vec![], vec![]);
         let msg = "Unexpected token Eql in right-hand side of type declaration";
         let err = parse_variant(&mut build_lexer("Foo = Foo = |"), &HashMap::new(), &sum_types).unwrap_err();
         assert_eq!(&err, msg)
@@ -283,7 +276,7 @@ mod tests {
     #[test]
     fn test_applying_non_operator_to_type() {
         let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("Foo", HashSet::new(), vec![]);
+        sum_types.add_type("Foo", vec![], vec![]);
         let msg = "Unexpected token Int in right-hand side of type declaration";
         let err = parse_variant(&mut build_lexer("Foo Int Int"), &HashMap::new(), &sum_types).unwrap_err();
         assert_eq!(&err, msg)
@@ -328,10 +321,11 @@ mod tests {
 
         let mut tokens = build_lexer("Foo a b c = Bar");
         let sum_type = parse(&mut tokens, &mut gen, &SumTypeDefs::new()).unwrap();
-        assert_eq!(sum_type.universals, vec![1, 2, 3]);
+        assert_eq!(sum_type.params, vec![TypeVar(1), TypeVar(2), TypeVar(3)]);
 
         let mut tokens = build_lexer("Baz a b = Quux");
         let sum_type = parse(&mut tokens, &mut gen, &SumTypeDefs::new()).unwrap();
-        assert_eq!(sum_type.universals, vec![4, 5]);
+        assert_eq!(sum_type.params, vec![TypeVar(4), TypeVar(5)]);
     }
 }
+

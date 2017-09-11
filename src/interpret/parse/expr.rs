@@ -229,8 +229,7 @@ mod tests {
     #[test]
     fn test_parses_constructor() {
         let mut sum_types = SumTypeDefs::new();
-        let mut constructors = HashSet::new();
-        constructors.insert((String::from("Foo"), Type::Unit));
+        let mut constructors = vec![(String::from("Foo"), Type::Unit)];
         sum_types.add_type("Bar", constructors, vec![]);
         let mut token_stream = match build_lexer("Foo") {
             TS::Expr(ts) => ts,

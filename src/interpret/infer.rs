@@ -431,12 +431,11 @@ mod tests {
         use interpret::structures::sums::SumType;
         let mut gen = GenTypeVar::new();
         let mut sum_types = SumTypeDefs::new();
-        let mut variants = HashSet::new();
-        variants.insert((String::from("Foo"), Unit));
+        let mut variants = vec![(String::from("Foo"), Unit)];
         sum_types.add_type("Baz", variants, vec![]);
 
         let term = Term::Constructor(0, String::from("Foo"));
-        let typ = Sum(SumType{name: String::from("Baz"), variants: vec![(String::from("Foo"), Unit)]});
+        let typ = Sum(SumType::new("Baz", vec![(String::from("Foo"), Unit)], vec![]));
         assert_type_with_context(&term, &typ, &vec![], &mut gen, &sum_types);
 
         let invalid_0 = Term::Sum(String::from("Foo"), Box::new(FIVE));
