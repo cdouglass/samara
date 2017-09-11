@@ -227,6 +227,7 @@ mod tests {
     use super::*;
     use interpret::evaluate;
     use interpret::SumTypeDefs;
+    use interpret::structures::sums::SumType;
     use self::LetBinding;
     use self::Op::*;
 
@@ -409,8 +410,6 @@ mod tests {
 
     #[test]
     fn test_nullary_constructor() {
-        use interpret::SumTypeDefs;
-        use interpret::structures::sums::SumType;
         let mut gen = GenTypeVar::new();
         let mut sum_types = SumTypeDefs::new();
         let variants = vec![(String::from("Foo"), Unit)];
@@ -420,13 +419,6 @@ mod tests {
         let typ = Sum(SumType::new("Baz", vec![(String::from("Foo"), Unit)], vec![]));
         assert_type_with_context(&term, &typ, &vec![], &mut gen, &sum_types);
 
-        /*
-        //TODO
-        let invalid_0 = Term::Sum(String::from("Foo"), Box::new(FIVE));
-        let expected = format!("Type error: {:?} != Int -> t1", typ);
-        assert_type_err_with_context(&invalid_0, &expected, &vec![], &mut gen, &sum_types);
-        */
-
         let invalid_1 = Term::App(Box::new(Term::Constructor(0, String::from("Foo"))), Box::new(FIVE));
         let expected = format!("Type error: Int -> t2 != {:?}", typ);
         assert_type_err_with_context(&invalid_1, &expected, &vec![], &mut gen, &sum_types);
@@ -434,7 +426,19 @@ mod tests {
 
     #[test]
     fn test_unary_constructor() {
-        //TODO alone
-        //TODO with argument
+        let mut gen = GenTypeVar::new();
+        let mut sum_types = SumTypeDefs::new();
+        let (t0, t1) = (gen.next().unwrap(), gen.next().unwrap());
+        let variants = vec![(String::from("Left"), t0.clone()), (String::from("Right"), t1.clone())];
+        sum_types.add_type("Either", variants, vec![t0, t1]).unwrap();
+
+        //TODO test unapplied, just right, and just left
+        let pred = Term::Atom(Atom::Bool(false));
+        let true_case = Term::App(Box::new(Term::Constructor(0, String::from("Left"))), Box::new(FIVE));
+        let false_case = Term::App(Box::new(Term::Constructor(1, String::from("Right"))), Box::new(Term::Atom(Atom::Bool(true))));
+        let term = Term::Conditional(Box::new(pred), Box::new(true_case), Box::new(false_case));
+        let concrete_variants = vec![(String::from("Left"), Type::Int), (String::from("Right"), Type::Bool)];
+        let expected = Sum(SumType::new("Either", concrete_variants, vec![Type::Int, Type::Bool]));
+        assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
     }
 }
