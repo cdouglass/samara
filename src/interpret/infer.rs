@@ -126,7 +126,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             let fresh_typ = instantiate(typ.clone(), universals, gen);
             Ok((fresh_typ, vec![]))
         },
-        Term::Sum(ref constructor, ref value) => {
+        Term::Sum(ref n, _, ref value) => {
             //TODO include index in Sum as well, to allow lookup
             //let (ref type_scheme, ref input_typ) = constructor_bindings.type_info(constructor.clone())?;
             //let (value_type, value_constraints) = get_constraints(value, &mut context, gen, constructor_bindings)?;

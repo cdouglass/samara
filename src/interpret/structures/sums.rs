@@ -47,14 +47,15 @@ impl SumTypeDefs {
 
         for (c, t) in constructors {
             self.constructors.insert(c.clone(), String::from(name));
+            let n = self.bindings.len();
 
             if let Unit = t {
-                let term = Term::Sum(c.clone(), Box::new(Term::Atom(Atom::Unit)));
+                let term = Term::Sum(n, c.clone(), Box::new(Term::Atom(Atom::Unit)));
                 //TODO don't unwrap
                 let binding = ConstructorBinding{tag: c, term: term, typ: Type::Sum(new_typ.clone())};
                 self.bindings.push(binding);
             } else {
-                let term = Term::Lambda(Box::new(Term::Sum(c.clone(), Box::new(Term::Var(0, String::from("x"))))), c.clone());
+                let term = Term::Lambda(Box::new(Term::Sum(n, c.clone(), Box::new(Term::Var(0, String::from("x"))))), c.clone());
                 let typ = arrow(t, Type::Sum(new_typ.clone()));
                 let binding = ConstructorBinding{tag: c, term: term, typ: typ};
                 self.bindings.push(binding);
