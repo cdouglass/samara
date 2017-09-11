@@ -9,7 +9,7 @@ use interpret::structures::Type::*;
 #[derive(Debug)]
 pub struct SumTypeDefs {
     types: HashMap<String, SumTypeScheme>,
-    by_constructor: HashMap<Constructor, SumTypeScheme>
+    by_constructor: HashMap<Constructor, (SumTypeScheme, Type)>
 }
 
 impl SumTypeDefs {
@@ -17,9 +17,9 @@ impl SumTypeDefs {
         self.types.get(t).cloned()
     }
 
-    pub fn type_of(&self, constr: Constructor) -> Result<SumTypeScheme, String> {
+    pub fn type_info(&self, constr: Constructor) -> Result<(SumTypeScheme, Type), String> {
         match self.by_constructor.get(&constr) {
-            Some(typ) => Ok(typ.clone()),
+            Some(&(ref scheme, ref typ)) => Ok((scheme.clone(), typ.clone())),
             None => Err(String::from(format!("Constructor {} does not exist", constr.name)))
         }
     }
@@ -46,10 +46,10 @@ impl SumTypeDefs {
         }
 
         for (c, typ) in constructors {
-            if let Ok(t) = self.type_of(c.clone()) {
-                    return Err(String::from(format!("Ambiguous constructor: {} is already defined for type {}", c.name, t.name)));
+            if let Some(&(ref t, _)) = self.by_constructor.get(&c) {
+                return Err(String::from(format!("Ambiguous constructor: {} is already defined for type {}", c.name, t.name)));
             }
-            new_by_constructor.insert(c, new_typ.clone());
+            new_by_constructor.insert(c, (new_typ.clone(), typ.clone()));
         }
 
         self.types.insert(String::from(name), new_typ);
@@ -224,10 +224,10 @@ mod tests {
 
         let maybe_type = SumTypeScheme::new("Maybe", maybe(), vec![]);
         let bar_type = SumTypeScheme::new("Bar", bar(), vec![]);
-        assert_eq!(defs.type_of(Constructor::new("Just")), Ok(maybe_type));
-        assert_eq!(defs.type_of(Constructor::new("Foo")), Ok(bar_type));
+        assert_eq!(defs.type_info(Constructor::new("Just")), Ok((maybe_type, TypeVar(0))));
+        assert_eq!(defs.type_info(Constructor::new("Foo")), Ok((bar_type, Int)));
 
-        match defs.type_of(Constructor::new("Baz")) {
+        match defs.type_info(Constructor::new("Baz")) {
             Ok(_) => panic!(),
             Err(msg) => assert_eq!(&msg, "Constructor Baz does not exist")
         }

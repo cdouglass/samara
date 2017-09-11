@@ -107,8 +107,20 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
                 }
             }
         },
-        //TODO lookup
-        Term::Sum(ref constructor, ref value) => Ok((Unit, vec![]))
+        Term::Sum(ref constructor, ref value) => {
+            let type_scheme = sum_types.type_info(constructor.clone())?;
+            match *value {
+                Some(ref v) => {
+                    let (value_type, value_constraints) = get_constraints(v, &mut context, gen, sum_types)?;
+                    Ok((Unit, vec![]))
+                    //TODO add constraint based on constructor
+                },
+                None => {
+                    Ok((Unit, vec![]))
+                    //TODO write out function type IF takes arg(s), plain type otherwise
+                }
+            }
+        }
     }
 }
 

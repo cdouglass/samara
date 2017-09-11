@@ -76,7 +76,7 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             Some(Token::Constructor(s)) => {
                 tokens.next();
                 let constructor = Constructor{name: s};
-                match sum_types.type_of(constructor.clone()) {
+                match sum_types.type_info(constructor.clone()) {
                     Ok(_) => Ok(Term::Sum(constructor, None)),
                     Err(_) => Err(String::from(format!("Unknown constructor {}", constructor.name)))
                 }
