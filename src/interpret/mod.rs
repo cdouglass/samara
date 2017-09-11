@@ -104,6 +104,10 @@ fn reduce(ast: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -
         // if not defined, would already have blown up in parse
         Var(n, _) => Ok(session_bindings[session_bindings.len() - n - 1].term.clone()),
         Constructor(n, _) => Ok(sum_types.bindings[n].term.clone()),
+        Sum(constructor, value) => {
+            let value_ = reduce(*value, session_bindings, sum_types)?;
+            Ok(Sum(constructor, Box::new(value_)))
+        }
         term => Ok(term)
     }
 }
@@ -149,7 +153,10 @@ fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
     match body {
         Atom(a) => Atom(a),
         Constructor(n, constructor) => Constructor(n, constructor),
-        Sum(constructor, value) => Sum(constructor, value),
+        Sum(constructor, value) => {
+            let subbed_value = sub_at_index(*value, t, index);
+            Sum(constructor, Box::new(subbed_value))
+        },
         App(a, b) => {
             let subbed_a = sub_at_index(*a, t, index);
             let subbed_b = sub_at_index(*b, t, index);
@@ -213,7 +220,10 @@ fn unshift_indices(term: Term, cutoff: usize) -> Term {
     match term {
         Atom(a) => Atom(a),
         Constructor(n, constructor) => Constructor(n, constructor),
-        Sum(constructor, value) => Sum(constructor, value),
+        Sum(constructor, value) => {
+            let value_ = unshift_indices(*value, cutoff);
+            Sum(constructor, Box::new(value_))
+        },
         App(a, b) => {
             let a_ = unshift_indices(*a, cutoff);
             let b_ = unshift_indices(*b, cutoff);

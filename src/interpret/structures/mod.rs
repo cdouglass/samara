@@ -113,7 +113,9 @@ impl Debug for Term {
                 }
             },
             Term::Constructor(_, ref constructor) => write!(f, "{}", constructor),
-            Term::Sum(ref constructor, ref value) => write!(f, "{} {:?}", constructor, value),
+            Term::Sum(ref constructor, ref value) => match {
+                write!(f, "{} {:?}", constructor, value),
+            }
         }
     }
 }
