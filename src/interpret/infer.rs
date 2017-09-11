@@ -164,6 +164,15 @@ fn unify(mut constraints: Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, Str
                 let mut substitution = unify(constraints)?;
                 insert_sub(&mut substitution, n, typ);
                 Ok(substitution)
+            } else if let (Sum(st1), Sum(st2)) = (s.clone(), t.clone()) {
+                if st1.name != st2.name {
+                    Err(String::from(format!("Type error: {:?} != {:?}", st1.name, st2.name)))
+                } else {
+                    for (t1, t2) in st1.params.iter().zip(st2.params.iter()) {
+                        constraints.push((t1.clone(), t2.clone()));
+                    }
+                    unify(constraints)
+                }
             } else if let (Arrow(s1, s2), Arrow(t1, t2)) = (s.clone(), t.clone()) {
                 constraints.push((*s1, *t1));
                 constraints.push((*s2, *t2));
