@@ -102,8 +102,7 @@ impl SumType {
 
 impl Debug for SumType {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        let param_string = self.params.iter().fold(String::new(), |acc, next| acc + &format!(" {:?}", next));
-        write!(f, "{}{}", self.name, param_string)
+        write!(f, "{:?}", Type::Sum(self.clone()))
     }
 }
 

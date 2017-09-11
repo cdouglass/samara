@@ -93,7 +93,7 @@ impl Debug for Atom {
             Atom::Unit => write!(f, "()"),
             Atom::Int(n) => write!(f, "{}", n),
             Atom::BuiltIn(ref op) => write!(f, "{:?}", op),
-            Atom::Bool(b) => write!(f, "{:?}", b)
+            Atom::Bool(b) => write!(f, "{}", if b { "True" } else { "False" })
         }
     }
 }
@@ -102,10 +102,10 @@ impl Debug for Term {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match *self {
             Term::Atom(ref a) => write!(f, "{:?}", a),
-            Term::App(ref a, ref b) => write!(f, "{:?} {{{:?}}}", a, b),
+            Term::App(ref a, ref b) => write!(f, "{:?} {:?}", a, b),
             Term::Lambda(ref t, ref name) => write!(f, "\\{} -> ({:?})", name, t),
             Term::Var(_, ref name) => write!(f, "{}", name),
-            Term::Conditional(ref pred, ref true_case, ref false_case) => write!(f, "IF {:?} THEN {:?} ELSE {:?}", pred, true_case, false_case),
+            Term::Conditional(ref pred, ref true_case, ref false_case) => write!(f, "if {:?} then {:?} else {:?}", pred, true_case, false_case),
             Term::Let(ref name, ref value, ref body) => {
                 match *body {
                     Some(ref b) => write!(f, "LET {} = {:?} IN {:?}", name, value, b),
@@ -120,13 +120,35 @@ impl Debug for Term {
 
 impl Debug for Type {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+
+        fn is_atomic(typ: &Type) -> bool {
+            match *typ {
+                Type::Unit | Type::Bool | Type::Int | Type::TypeVar(_) => true,
+                Type::Sum(ref s) => {
+                    s.params.is_empty()
+                },
+                Type::Arrow(_, _) => false
+            }
+        }
+
+        fn wrap(typ: &Type) -> String {
+            if is_atomic(typ) {
+                format!("{:?}", typ)
+            } else {
+                format!("({:?})", typ)
+            }
+        }
+
         match *self {
             Type::Unit => write!(f, "()"),
             Type::Bool => write!(f, "Bool"),
             Type::Int => write!(f, "Int"),
-            Type::Arrow(ref a, ref b) => write!(f, "{:?} -> {:?}", *a, *b),
-            Type::TypeVar(n) => write!(f, "t{:?}", n),
-            Type::Sum(ref s) => write!(f, "{:?}", s)
+            Type::Arrow(ref a, ref b) => write!(f, "{} -> {}", wrap(a), wrap(b)),
+            Type::TypeVar(n) => write!(f, "t{}", n),
+            Type::Sum(ref s) => {
+                let param_string = s.params.iter().fold(String::new(), |acc, next| acc + &format!(" {}", wrap(next)));
+                write!(f, "{}{}", s.name, param_string)
+            }
         }
     }
 }
