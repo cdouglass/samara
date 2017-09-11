@@ -74,10 +74,10 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             },
             Some(Token::Constructor(s)) => {
                 tokens.next();
-                match sum_types.type_info(s.clone()) {
-                    //TODO lookup index
-                    Ok(_) => Ok(Term::Constructor(0, s)),
-                    Err(_) => Err(String::from(format!("Unknown constructor {}", s)))
+                let mut binding_iter = sum_types.bindings.iter();
+                match binding_iter.position(|x| x.tag == s) {
+                    Some(k) => Ok(Term::Constructor(k, s)),
+                    None => Err(String::from(format!("Unknown constructor {}", s)))
                 }
             },
             Some(Token::Identifier(s)) => {
