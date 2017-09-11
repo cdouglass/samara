@@ -77,7 +77,7 @@ fn main() {
             }
             Some(Command::Unknown) => println!("Unknown command"),
             None => {
-                if let "type " = &expr[0..5] {
+                if expr.starts_with("type ") {
                     let new_sum_type = interpret::declare_sum_type(&expr[5..], &mut gen_type_var, &mut sum_type_defs);
                     match new_sum_type {
                         Ok(sum) => println!("{:?}", sum),
