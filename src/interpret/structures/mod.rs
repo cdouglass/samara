@@ -4,6 +4,7 @@ use std::fmt::Formatter;
 use std::str::FromStr;
 
 pub mod sums;
+pub mod patterns;
 
 use self::Op::*;
 
