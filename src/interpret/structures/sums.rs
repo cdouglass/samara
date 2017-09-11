@@ -222,13 +222,13 @@ mod tests {
     #[test]
     fn test_find_type_of_constructor() {
         let mut defs = SumTypeDefs::new();
-        defs.add_type("Maybe", maybe(), vec![]).unwrap();
+        defs.add_type("Maybe", maybe(), vec![0]).unwrap();
         defs.add_type("Bar", bar(), vec![]).unwrap();
 
-        let maybe_type = SumTypeScheme::new("Maybe", maybe(), vec![]);
+        let maybe_type = SumTypeScheme::new("Maybe", maybe(), vec![0]);
         let bar_type = SumTypeScheme::new("Bar", bar(), vec![]);
-        assert_eq!(defs.type_info(String::from("Just")), Ok((maybe_type, TypeVar(0))));
-        assert_eq!(defs.type_info(String::from("Foo")), Ok((bar_type, Int)));
+        assert_eq!(defs.type_info(String::from("Just")), Ok((maybe_type.clone(), arrow(TypeVar(0), maybe_type.apply(vec![TypeVar(0)]).unwrap()))));
+        assert_eq!(defs.type_info(String::from("Foo")), Ok((bar_type.clone(), arrow(Int, bar_type.apply(vec![]).unwrap()))));
 
         match defs.type_info(String::from("Baz")) {
             Ok(_) => panic!(),

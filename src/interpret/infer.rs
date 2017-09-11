@@ -107,8 +107,9 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
                 }
             }
         },
-        Term::Constructor(ref n, ref constructor) => {
-            unimplemented!()
+        Term::Constructor(ref n, _) => {
+            let ref binding = sum_types.bindings[*n];
+            Ok((binding.typ.clone(), vec![]))
         },
         Term::Sum(ref constructor, ref value) => {
             let (ref type_scheme, ref input_typ) = sum_types.type_info(constructor.clone())?;
