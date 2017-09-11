@@ -18,8 +18,6 @@ pub enum Token {
     Var(String)
 }
 
-use self::Token::*;
-
 pub struct TokenStream<'a> {
     it: Peekable<Chars<'a>>
 }

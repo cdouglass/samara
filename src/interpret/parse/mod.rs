@@ -1,12 +1,8 @@
-use std::iter::Iterator;
 use std::iter::Peekable;
 
 use interpret::SumTypeDefs;
-use interpret::infer::GenTypeVar;
-use interpret::lex::decl::TokenStream as DTokenStream;
 use interpret::lex::expr::TokenStream as ETokenStream;
 use interpret::structures::Term;
-use interpret::structures::Type;
 
 mod decl;
 mod expr;

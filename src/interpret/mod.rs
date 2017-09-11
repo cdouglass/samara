@@ -39,8 +39,7 @@ pub fn declare_sum_type(decl: &str, mut gen: &mut GenTypeVar, mut sum_types: &mu
     match build_lexer_decl(decl) {
         TokenStream::Decl(mut tokens) => {
             let sum_type_scheme = parse_decl(&mut tokens, gen, sum_types)?;
-            let variants = sum_type_scheme.variants.iter().cloned().collect();
-            sum_types.add_type(&sum_type_scheme.name, variants, sum_type_scheme.params.clone())?;
+            sum_types.add_type(&sum_type_scheme.name, sum_type_scheme.variants.clone(), sum_type_scheme.params.clone())?;
             Ok(sum_type_scheme)
         },
         _ => panic!()

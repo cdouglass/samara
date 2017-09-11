@@ -157,13 +157,10 @@ fn parse_let(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::parse;
     use interpret::SumTypeDefs;
     use interpret::lex::build_lexer;
     use interpret::lex::TokenStream as TS;
-    use interpret::lex::expr::TokenStream;
     use interpret::structures::Atom;
     use interpret::structures::Term;
     use interpret::structures::Type;
@@ -171,7 +168,7 @@ mod tests {
     fn assert_parse(expr: &str, expected: Term) {
         let mut token_stack = vec![];
         let mut ids = vec![];
-        let mut sum_types = SumTypeDefs::new();
+        let sum_types = SumTypeDefs::new();
         let mut tokens = match build_lexer(expr) {
             TS::Expr(ts) => ts,
             _ => panic!()
@@ -188,7 +185,7 @@ mod tests {
     fn assert_parse_err(expr: &str, msg: &str) {
         let mut token_stack = vec![];
         let mut ids = vec![];
-        let mut sum_types = SumTypeDefs::new();
+        let sum_types = SumTypeDefs::new();
         let mut tokens = match build_lexer(expr) {
             TS::Expr(ts) => ts,
             _ => panic!()
@@ -229,8 +226,8 @@ mod tests {
     #[test]
     fn test_parses_constructor() {
         let mut sum_types = SumTypeDefs::new();
-        let mut constructors = vec![(String::from("Foo"), Type::Unit)];
-        sum_types.add_type("Bar", constructors, vec![]);
+        let constructors = vec![(String::from("Foo"), Type::Unit)];
+        sum_types.add_type("Bar", constructors, vec![]).unwrap();
         let mut token_stream = match build_lexer("Foo") {
             TS::Expr(ts) => ts,
             _ => panic!()

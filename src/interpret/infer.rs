@@ -108,7 +108,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             }
         },
         Term::Constructor(ref n, _) => {
-            let ref binding = sum_types.bindings[*n];
+            let binding = &sum_types.bindings[*n];
             Ok((binding.typ.clone(), vec![]))
         },
         Term::Sum(ref constructor, ref value) => {
@@ -399,7 +399,7 @@ mod tests {
     fn test_fresh_instantiation() {
         let mut bindings = vec![];
         let mut gen = GenTypeVar::new();
-        let mut sum_types = SumTypeDefs::new();
+        let sum_types = SumTypeDefs::new();
         evaluate("let id = (\\x -> x)", &mut bindings, &mut gen, &sum_types).unwrap();
         let x = Term::Var(0, String::new());
         assert_type_with_context(&x, &arrow(TypeVar(3), TypeVar(3)), &bindings, &mut gen, &sum_types);
@@ -413,17 +413,19 @@ mod tests {
         use interpret::structures::sums::SumType;
         let mut gen = GenTypeVar::new();
         let mut sum_types = SumTypeDefs::new();
-        let mut variants = vec![(String::from("Foo"), Unit)];
-        sum_types.add_type("Baz", variants, vec![]);
+        let variants = vec![(String::from("Foo"), Unit)];
+        sum_types.add_type("Baz", variants, vec![]).unwrap();
 
         let term = Term::Constructor(0, String::from("Foo"));
         let typ = Sum(SumType::new("Baz", vec![(String::from("Foo"), Unit)], vec![]));
         assert_type_with_context(&term, &typ, &vec![], &mut gen, &sum_types);
 
+        /*
+        //TODO
         let invalid_0 = Term::Sum(String::from("Foo"), Box::new(FIVE));
         let expected = format!("Type error: {:?} != Int -> t1", typ);
-        //TODO
-        //assert_type_err_with_context(&invalid_0, &expected, &vec![], &mut gen, &sum_types);
+        assert_type_err_with_context(&invalid_0, &expected, &vec![], &mut gen, &sum_types);
+        */
 
         let invalid_1 = Term::App(Box::new(Term::Constructor(0, String::from("Foo"))), Box::new(FIVE));
         let expected = format!("Type error: Int -> t2 != {:?}", typ);

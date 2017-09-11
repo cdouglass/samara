@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::iter::Iterator;
 use std::iter::Peekable;
 
@@ -53,11 +52,10 @@ fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, 
 
     match tokens.peek().cloned() {
         Some(Token::Separator) => { tokens.next(); },
-        Some(Token::Sum(_)) => { },
+        Some(Token::Sum(_)) | None => { },
         Some(tok) => {
             return Err(String::from(format!("Unexpected token {:?} in right-hand side of type declaration", tok)));
         }
-        None => { }
     }
 
     Ok((String::from(name), typ))
@@ -210,11 +208,11 @@ mod tests {
 
     #[test]
     fn test_parses_nullary_sum_type() {
-        let mut variants = vec![(String::from("JustInt"), Type::Int), (String::from("Nothing"), Type::Unit)];
+        let variants = vec![(String::from("JustInt"), Type::Int), (String::from("Nothing"), Type::Unit)];
         let maybe_int = SumType::new("MaybeInt", variants.clone(), vec![]);
 
         let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("MaybeInt", variants, vec![]);
+        sum_types.add_type("MaybeInt", variants, vec![]).unwrap();
         assert_parses_type_with_context("MaybeInt", maybe_int.apply(vec![]).unwrap(), &sum_types);
     }
 
@@ -227,9 +225,9 @@ mod tests {
 
     #[test]
     fn test_parses_nested_type() {
-        let mut variants = vec![(String::from("Just"), Type::TypeVar(0)), (String::from("Nothing"), Type::Unit)];
+        let variants = vec![(String::from("Just"), Type::TypeVar(0)), (String::from("Nothing"), Type::Unit)];
         let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("Maybe", variants.clone(), vec![TypeVar(0)]);
+        sum_types.add_type("Maybe", variants.clone(), vec![TypeVar(0)]).unwrap();
 
         let maybe = SumType::new("Maybe", variants, vec![TypeVar(0)]);
         let expected = maybe.apply(vec![maybe.apply(vec![Type::Int]).unwrap()]).unwrap();
@@ -239,7 +237,7 @@ mod tests {
     #[test]
     fn test_extra_close_paren() {
         let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("Foo", vec![], vec![]);
+        sum_types.add_type("Foo", vec![], vec![]).unwrap();
         let err = parse_type(&mut build_lexer("Int -> (Int -> Int)) -> Int"), &mut vec![], &HashMap::new(), &sum_types).unwrap_err();
         assert_eq!(&err, "Unexpected token Close in right-hand side of type declaration");
     }
@@ -249,7 +247,7 @@ mod tests {
     #[test]
     fn test_extra_close_paren_in_variant() {
         let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("Foo", vec![], vec![]);
+        sum_types.add_type("Foo", vec![], vec![]).unwrap();
         let err = parse_variant(&mut build_lexer("Foo ())"), &HashMap::new(), &sum_types).unwrap_err();
         assert_eq!(&err, "Unexpected token Close in right-hand side of type declaration");
     }
@@ -257,7 +255,7 @@ mod tests {
     #[test]
     fn test_rejects_extra_eq() {
         let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("Foo", vec![], vec![]);
+        sum_types.add_type("Foo", vec![], vec![]).unwrap();
         let msg = "Unexpected token Eql in right-hand side of type declaration";
         let err = parse_variant(&mut build_lexer("Foo = Foo = |"), &HashMap::new(), &sum_types).unwrap_err();
         assert_eq!(&err, msg)
@@ -276,7 +274,7 @@ mod tests {
     #[test]
     fn test_applying_non_operator_to_type() {
         let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("Foo", vec![], vec![]);
+        sum_types.add_type("Foo", vec![], vec![]).unwrap();
         let msg = "Unexpected token Int in right-hand side of type declaration";
         let err = parse_variant(&mut build_lexer("Foo Int Int"), &HashMap::new(), &sum_types).unwrap_err();
         assert_eq!(&err, msg)

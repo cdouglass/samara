@@ -1,6 +1,4 @@
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::slice::Iter;
 
 use interpret::infer::apply_substitution;
 use interpret::structures::arrow;
@@ -29,13 +27,13 @@ impl SumTypeDefs {
     }
 
     pub fn type_info(&self, constr: String) -> Result<(SumType, Type), String> {
-        for ref binding in self.bindings.iter() {
+        for binding in &self.bindings {
             if binding.tag == constr {
                 let typ = binding.typ.clone();
                 //TODO don't unwrap
-                let type_name = self.constructors.get(&constr).unwrap();
-                let ref scheme = self.types.get(type_name).unwrap();
-                return Ok(((*scheme).clone(), typ));
+                let type_name = &self.constructors[&constr];
+                let scheme = &self.types[type_name];
+                return Ok((scheme.clone(), typ));
             }
         }
         Err(String::from(format!("Constructor {} does not exist", constr)))
@@ -49,9 +47,9 @@ impl SumTypeDefs {
             }
         }
 
-        for &(ref c, _) in constructors.iter() {
-            if let Some(ref s) = self.constructors.get(c) {
-                return Err(String::from(format!("Ambiguous constructor: {} is already defined for type {}", c, s)));
+        for &(ref c, _) in &constructors {
+            if let Some(t) = self.constructors.get(c) {
+                return Err(String::from(format!("Ambiguous constructor: {} is already defined for type {}", c, t)));
             }
         }
 
@@ -103,7 +101,7 @@ impl SumType {
 
     pub fn apply(&self, parameters: Vec<Type>) -> Result<Type, String> {
         if self.params.len() != parameters.len() {
-            return Err(String::from(format!("Type operator {} requires exactly {} parameter(s), got {}: {:?}", self.name, self.params.len(), parameters.len(), parameters)));
+            Err(String::from(format!("Type operator {} requires exactly {} parameter(s), got {}: {:?}", self.name, self.params.len(), parameters.len(), parameters)))
         } else {
             let mut substitution = HashMap::new();
             for (ref a, ref b) in self.params.iter().cloned().zip(parameters.iter().cloned()) {
@@ -112,7 +110,7 @@ impl SumType {
                 }
             }
             let mut variants = vec![];
-            for &(ref constructor, ref typ) in self.variants.iter() {
+            for &(ref constructor, ref typ) in &self.variants {
                 let mut t = typ.clone();
                 apply_substitution(&substitution, &mut t);
                 variants.push((constructor.clone(), t));
@@ -167,7 +165,7 @@ mod tests {
     #[test]
     fn test_apply_unary_sum_type() {
         let typ = SumType::new("Maybe", maybe(), vec![TypeVar(0)]).apply(vec![Type::Int]).unwrap();
-        let mut variants = vec![(String::from("Just"), Type::Int), (String::from("None"), Type::Unit)];
+        let variants = vec![(String::from("Just"), Type::Int), (String::from("None"), Type::Unit)];
         let expected = Type::Sum(SumType{name: String::from("Maybe"), variants: variants, params: vec![Type::Int]});
         assert_eq!(typ, expected);
     }

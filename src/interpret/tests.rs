@@ -21,7 +21,7 @@ fn assert_evaluation_err(expr: &str, mut bindings: &mut Vec<LetBinding>, mut gen
 }
 
 fn assert_evaluates_to_atom(expr: &str, mut bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar, expected: Atom) {
-    let mut sum_types = SumTypeDefs::new();
+    let sum_types = SumTypeDefs::new();
     match evaluate(expr, &mut bindings, gen, &sum_types).unwrap() {
         Term::Atom(a) => assert_eq!(a, expected),
         result => {
@@ -52,7 +52,7 @@ fn test_evaluate_op() {
 #[test]
 fn test_partially_apply_op() {
     let mut gen = GenTypeVar::new();
-    let mut sum_types = SumTypeDefs::new();
+    let sum_types = SumTypeDefs::new();
     let result = evaluate("(% 10)", &mut vec![], &mut gen, &sum_types).unwrap();
     match result {
         Term::App(a, b) => {
@@ -101,7 +101,7 @@ fn test_polymorphic_let() {
 fn test_polymorphic_session_let() {
     let mut bindings = vec![];
     let mut gen = GenTypeVar::new();
-    let mut sum_types = SumTypeDefs::new();
+    let sum_types = SumTypeDefs::new();
     evaluate("let id = (\\x -> x)", &mut bindings, &mut gen, &sum_types).unwrap();
 
     assert_evaluates_to_atom("id 5", &mut bindings, &mut gen, Atom::Int(5));
@@ -131,7 +131,7 @@ fn test_save_session_bindings() {
 
     let mut bindings = vec![];
     let mut gen = GenTypeVar::new();
-    let mut sum_types = SumTypeDefs::new();
+    let sum_types = SumTypeDefs::new();
     evaluate("let x = (* 5 10)", &mut bindings, &mut gen, &sum_types).unwrap();
 
     let reuse = evaluate("x", &mut bindings, &mut gen, &sum_types);
@@ -142,7 +142,7 @@ fn test_save_session_bindings() {
 fn test_recursive_session_bindings() {
     let mut bindings = vec![];
     let mut gen = GenTypeVar::new();
-    let mut sum_types = SumTypeDefs::new();
+    let sum_types = SumTypeDefs::new();
     evaluate("let fact = (\\n -> if (< n 2) then 1 else (* n (fact (- n 1))))", &mut bindings, &mut gen, &sum_types).unwrap();
     assert_evaluates_to_atom("fact 8", &mut bindings, &mut GenTypeVar::new(), Atom::Int(40320));
 }
@@ -151,7 +151,7 @@ fn test_recursive_session_bindings() {
 fn test_type_of_using_session_bindings() {
     let mut bindings = vec![];
     let mut gen = GenTypeVar::new();
-    let mut sum_types = SumTypeDefs::new();
+    let sum_types = SumTypeDefs::new();
     evaluate("let x = (* 5 10)", &mut bindings, &mut gen, &sum_types).unwrap();
     let typ = type_of("x", &bindings, &mut gen, &sum_types).1.unwrap();
     assert_eq!(typ, Type::Int);
