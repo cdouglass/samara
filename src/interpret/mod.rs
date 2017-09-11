@@ -59,7 +59,7 @@ pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<LetBinding>, mut gen:
     match type_of(expr, session_bindings, gen, sum_types) {
         (Err(msg), _) | (_, Err(msg)) => Err(msg),
         (Ok(ast), Ok(typ)) => {
-            let term = reduce(ast, session_bindings)?;
+            let term = reduce(ast, session_bindings, sum_types)?;
 
             if let Let(ref s, ref value, None) = term {
                 session_bindings.push(LetBinding{name: s.clone(), term: *value.clone(), typ: typ.clone()});
@@ -70,20 +70,20 @@ pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<LetBinding>, mut gen:
     }
 }
 
-fn reduce(ast: Term, session_bindings: &[LetBinding]) -> Result<Term, String> {
+fn reduce(ast: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -> Result<Term, String> {
     match ast {
         App(func, arg) => {
-            let f = reduce(*func, session_bindings);
-            let a = reduce(*arg, session_bindings);
+            let f = reduce(*func, session_bindings, sum_types);
+            let a = reduce(*arg, session_bindings, sum_types);
             match (f, a) {
-                (Ok(f), Ok(a)) => apply(f, a, session_bindings),
+                (Ok(f), Ok(a)) => apply(f, a, session_bindings, sum_types),
                 _ => Err(String::from("Type error"))
             }
         },
         Conditional(pred, true_case, false_case) => {
-            match reduce(*pred, session_bindings) {
-                Ok(Term::Atom(Bool(true))) => reduce(*true_case, session_bindings),
-                Ok(Term::Atom(Bool(false))) => reduce(*false_case, session_bindings),
+            match reduce(*pred, session_bindings, sum_types) {
+                Ok(Term::Atom(Bool(true))) => reduce(*true_case, session_bindings, sum_types),
+                Ok(Term::Atom(Bool(false))) => reduce(*false_case, session_bindings, sum_types),
                 Ok(_) => panic!(),
                 Err(msg) => Err(msg)
             }
@@ -91,10 +91,10 @@ fn reduce(ast: Term, session_bindings: &[LetBinding]) -> Result<Term, String> {
         Let(name, value, body) => {
             // for now, same as lambda application except with sugar for self-reference
             // BUT will have to change once types are enforced
-            match reduce(fix(name.clone(), *value), session_bindings) {
+            match reduce(fix(name.clone(), *value), session_bindings, sum_types) {
                 Ok(val) => {
                     match body {
-                        Some(b) => reduce(unshift_indices(sub_at_index(*b, &val, 0), 1), session_bindings),
+                        Some(b) => reduce(unshift_indices(sub_at_index(*b, &val, 0), 1), session_bindings, sum_types),
                         None => Ok(Let(name, Box::new(val), None))
                     }
                 },
@@ -103,11 +103,12 @@ fn reduce(ast: Term, session_bindings: &[LetBinding]) -> Result<Term, String> {
         },
         // if not defined, would already have blown up in parse
         Var(n, _) => Ok(session_bindings[session_bindings.len() - n - 1].term.clone()),
+        Constructor(n, _) => Ok(sum_types.bindings[n].term.clone()),
         term => Ok(term)
     }
 }
 
-fn apply(func: Term, arg: Term, session_bindings: &[LetBinding]) -> Result<Term, String> {
+fn apply(func: Term, arg: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -> Result<Term, String> {
     let type_err = String::from("Type error");
     match func {
         Atom(a) => {
@@ -134,7 +135,7 @@ fn apply(func: Term, arg: Term, session_bindings: &[LetBinding]) -> Result<Term,
             }
         },
         Lambda(body, _) => {
-            reduce(unshift_indices(sub_at_index(*body, &arg, 0), 1), session_bindings)
+            reduce(unshift_indices(sub_at_index(*body, &arg, 0), 1), session_bindings, sum_types)
         },
         // func is already reduced, so should not be in any of these forms
         Conditional(_, _, _) | Var(_, _) | Let(_, _, _) | Constructor(_, _) | Sum(_, _) => {
