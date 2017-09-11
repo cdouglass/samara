@@ -3,13 +3,24 @@ use std::collections::HashSet;
 use std::slice::Iter;
 
 use interpret::infer::apply_substitution;
+use interpret::structures::arrow;
+use interpret::structures::Atom;
+use interpret::structures::Term;
 use interpret::structures::Type;
 use interpret::structures::Type::*;
 
 #[derive(Debug)]
+pub struct ConstructorBinding {
+    pub tag: String,
+    pub term: Term,
+    pub typ: Type
+}
+
+#[derive(Debug)]
 pub struct SumTypeDefs {
+    pub bindings: Vec<ConstructorBinding>,
     types: HashMap<String, SumTypeScheme>,
-    by_constructor: HashMap<String, (SumTypeScheme, Type)>,
+    constructors: HashMap<String, String> // key: constructor tag; value: type name. just for checking existence
 }
 
 impl SumTypeDefs {
@@ -18,26 +29,19 @@ impl SumTypeDefs {
     }
 
     pub fn type_info(&self, constr: String) -> Result<(SumTypeScheme, Type), String> {
-        match self.by_constructor.get(&constr) {
-            Some(&(ref scheme, ref typ)) => Ok((scheme.clone(), typ.clone())),
-            None => Err(String::from(format!("Constructor {} does not exist", constr)))
+        for ref binding in self.bindings.iter() {
+            if binding.tag == constr {
+                let typ = binding.typ.clone();
+                //TODO don't unwrap
+                let type_name = self.constructors.get(&constr).unwrap();
+                let ref scheme = self.types.get(type_name).unwrap();
+                return Ok(((*scheme).clone(), typ));
+            }
         }
-    }
-
-    pub fn all_constructors(&self, type_name: &str) -> Result<HashSet<(String, Type)>, String> {
-        match self.types.get(type_name) {
-            Some(typ) => {
-                let vs: Iter<(String, Type)> = typ.variants.iter();
-                let variants: HashSet<(String, Type)> = vs.cloned().collect();
-                Ok(variants)
-            },
-            None => Err(String::from(format!("Type {} does not exist", type_name)))
-        }
+        Err(String::from(format!("Constructor {} does not exist", constr)))
     }
 
     pub fn add_type(&mut self, name: &str, constructors: HashSet<(String, Type)>, universals: Vec<usize>) -> Result<(), String> {
-        let new_typ = SumTypeScheme::new(name, constructors.clone(), universals);
-        let mut new_by_constructor = HashMap::new();
 
         for typ in self.types.values() {
             if typ.name == name {
@@ -45,23 +49,37 @@ impl SumTypeDefs {
             }
         }
 
-        for (c, typ) in constructors {
-            if let Some(&(ref t, _)) = self.by_constructor.get(&c) {
-                return Err(String::from(format!("Ambiguous constructor: {} is already defined for type {}", c, t.name)));
+        for &(ref c, _) in constructors.iter() {
+            if let Some(ref s) = self.constructors.get(c) {
+                return Err(String::from(format!("Ambiguous constructor: {} is already defined for type {}", c, s)));
             }
-            new_by_constructor.insert(c, (new_typ.clone(), typ.clone()));
         }
 
-        self.types.insert(String::from(name), new_typ);
-        for (c, typ) in new_by_constructor {
-            self.by_constructor.insert(c, typ);
+        let new_typ = SumTypeScheme::new(name, constructors.clone(), universals.clone());
+        self.types.insert(String::from(name), new_typ.clone());
+
+        for (c, t) in constructors {
+            self.constructors.insert(c.clone(), String::from(name));
+
+            if let Unit = t {
+                let term = Term::Sum(c.clone(), Box::new(Term::Atom(Atom::Unit)));
+                //TODO don't unwrap
+                let typ = new_typ.apply(universals.iter().map(|n| TypeVar(*n)).collect()).unwrap();
+                let binding = ConstructorBinding{tag: c, term: term, typ: typ};
+                self.bindings.push(binding);
+            } else {
+                let term = Term::Lambda(Box::new(Term::Sum(c.clone(), Box::new(Term::Atom(Atom::Unit)))), c.clone());
+                let typ = arrow(t, new_typ.apply(universals.iter().map(|n| TypeVar(*n)).collect()).unwrap());
+                let binding = ConstructorBinding{tag: c, term: term, typ: typ};
+                self.bindings.push(binding);
+            }
         }
 
         Ok(())
     }
 
     pub fn new() -> SumTypeDefs {
-        SumTypeDefs{by_constructor: HashMap::new(), types: HashMap::new()}
+        SumTypeDefs{bindings: vec![], constructors: HashMap::new(), types: HashMap::new()}
     }
 }
 
@@ -216,24 +234,5 @@ mod tests {
             Ok(_) => panic!(),
             Err(msg) => assert_eq!(&msg, "Constructor Baz does not exist")
         }
-    }
-
-    #[test]
-    fn test_get_all_constructors_for_type() {
-        let mut defs = SumTypeDefs::new();
-        defs.add_type("Maybe", maybe(), vec![]).unwrap();
-        defs.add_type("Baz", bar(), vec![]).unwrap();
-
-        let mut expected = HashSet::new();
-        expected.insert((String::from("Just"), TypeVar(0)));
-        expected.insert((String::from("None"), Unit));
-        assert_eq!(defs.all_constructors("Maybe"), Ok(expected));
-
-        let mut expected = HashSet::new();
-        expected.insert((String::from("Foo"), Int));
-        expected.insert((String::from("Bar"), Bool));
-        assert_eq!(defs.all_constructors("Baz"), Ok(expected));
-
-        assert_eq!(Err(String::from("Type Invalid does not exist")), defs.all_constructors("Invalid"));
     }
 }

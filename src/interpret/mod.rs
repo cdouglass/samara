@@ -140,6 +140,7 @@ fn apply(func: Term, arg: Term, session_bindings: &[LetBinding]) -> Result<Term,
         Conditional(_, _, _) | Var(_, _) | Let(_, _, _) => {
             Err(type_err)
         },
+        Constructor(constructor) => unimplemented!(),
         Sum(c, v) => Err(type_err)
     }
 }
@@ -148,7 +149,7 @@ fn apply(func: Term, arg: Term, session_bindings: &[LetBinding]) -> Result<Term,
 fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
     match body {
         Atom(a) => Atom(a),
-        //TODO
+        Constructor(constructor) => Constructor(constructor),
         Sum(constructor, value) => Sum(constructor, value),
         App(a, b) => {
             let subbed_a = sub_at_index(*a, t, index);
@@ -182,6 +183,7 @@ fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
 fn shift_indices(term: &Term, distance: usize, cutoff: usize) -> Term {
     match *term {
         Atom(ref a) => Atom(a.clone()),
+        Constructor(ref constructor) => Constructor(constructor.clone()),
         Sum(ref constructor, ref value) => Sum(constructor.clone(), value.clone()),
         App(ref a, ref b) => {
             let a_ = shift_indices(a, distance, cutoff);
@@ -211,6 +213,7 @@ fn shift_indices(term: &Term, distance: usize, cutoff: usize) -> Term {
 fn unshift_indices(term: Term, cutoff: usize) -> Term {
     match term {
         Atom(a) => Atom(a),
+        Constructor(constructor) => Constructor(constructor),
         Sum(constructor, value) => Sum(constructor, value),
         App(a, b) => {
             let a_ = unshift_indices(*a, cutoff);

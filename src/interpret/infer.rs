@@ -107,15 +107,17 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
                 }
             }
         },
+        Term::Constructor(ref constructor) => {
+            unimplemented!()
+        },
         Term::Sum(ref constructor, ref value) => {
             let (ref type_scheme, ref input_typ) = sum_types.type_info(constructor.clone())?;
-            match *value {
-                Some(ref v) => {
-                    let (value_type, value_constraints) = get_constraints(v, &mut context, gen, sum_types)?;
-                    Ok((Unit, vec![]))
+            let (value_type, value_constraints) = get_constraints(value, &mut context, gen, sum_types)?;
+            Ok((Unit, vec![]))
                     //TODO find actual type
                     //TODO add constraint based on constructor
-                },
+                /*
+                 //TODO Term::Constructor
                 None => {
                     if type_scheme.universals.is_empty() {
                         let output_typ = type_scheme.apply(vec![])?;
@@ -130,7 +132,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
                         Ok((Unit, vec![]))
                     }
                 }
-            }
+                */
         }
     }
 }
@@ -432,16 +434,16 @@ mod tests {
         variants.insert((String::from("Foo"), Unit));
         sum_types.add_type("Baz", variants, vec![]);
 
-        let term = Term::Sum(String::from("Foo"), None);
+        let term = Term::Constructor(String::from("Foo"));
         let typ = Sum(SumType{name: String::from("Baz"), variants: vec![(String::from("Foo"), Unit)]});
         assert_type_with_context(&term, &typ, &vec![], &mut gen, &sum_types);
 
-        let invalid_0 = Term::Sum(String::from("Foo"), Some(Box::new(FIVE)));
+        let invalid_0 = Term::Sum(String::from("Foo"), Box::new(FIVE));
         let expected = format!("Type error: {:?} != Int -> t1", typ);
         //TODO
         //assert_type_err_with_context(&invalid_0, &expected, &vec![], &mut gen, &sum_types);
 
-        let invalid_1 = Term::App(Box::new(Term::Sum(String::from("Foo"), None)), Box::new(FIVE));
+        let invalid_1 = Term::App(Box::new(Term::Constructor(String::from("Foo"))), Box::new(FIVE));
         let expected = format!("Type error: Int -> t2 != {:?}", typ);
         assert_type_err_with_context(&invalid_1, &expected, &vec![], &mut gen, &sum_types);
     }

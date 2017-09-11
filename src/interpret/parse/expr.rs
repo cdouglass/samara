@@ -75,7 +75,8 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             Some(Token::Constructor(s)) => {
                 tokens.next();
                 match sum_types.type_info(s.clone()) {
-                    Ok(_) => Ok(Term::Sum(s, None)),
+                    //TODO lookup index
+                    Ok(_) => Ok(Term::Constructor(s)),
                     Err(_) => Err(String::from(format!("Unknown constructor {}", s)))
                 }
             },
@@ -236,7 +237,7 @@ mod tests {
             _ => panic!()
         };
         let ast = parse(&mut token_stream, &mut vec![], &mut vec![], &sum_types).unwrap();
-        let expected = Term::Sum(String::from("Foo"), None);
+        let expected = Term::Constructor(String::from("Foo"));
         assert_eq!(ast, expected);
     }
 

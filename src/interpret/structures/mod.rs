@@ -47,7 +47,8 @@ pub enum Term {
     Var(usize, String),
     Conditional(Box<Term>, Box<Term>, Box<Term>), // predicate, true case, false case
     Let(String, Box<Term>, Option<Box<Term>>), // variable name, value, body (only one binding per let, for now)
-    Sum(String, Option<Box<Term>>)
+    Constructor(String), // TODO add usize
+    Sum(String, Box<Term>)
 }
 
 pub struct LetBinding {
@@ -111,12 +112,8 @@ impl Debug for Term {
                     None => write!(f, "LET {} = {:?}", name, value)
                 }
             },
-            Term::Sum(ref constructor, ref value) => {
-                match *value {
-                    Some(ref v) => write!(f, "{} {:?}", constructor, v),
-                    None => write!(f, "{}", constructor)
-                }
-            }
+            Term::Constructor(ref constructor) => write!(f, "{}", constructor),
+            Term::Sum(ref constructor, ref value) => write!(f, "{} {:?}", constructor, value),
         }
     }
 }
