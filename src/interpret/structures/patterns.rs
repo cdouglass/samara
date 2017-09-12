@@ -103,4 +103,35 @@ mod tests {
         assert_eq!(pat.match_term(&Term::Constructor(RIGHT, String::from("Right"))), None);
         assert_eq!(pat.match_term(&Term::Atom(Atom::Int(5))), None);
     }
+
+    #[test]
+    fn test_nested_irrefutable_pattern() {
+        let irrefutable = Var(1, String::from("x"));
+        // Just(Left(Right(x)))
+        let pat = Sum(JUST, String::from("Just"), Box::new(Sum(LEFT, String::from("Left"), Box::new(Sum(RIGHT, String::from("Right"), Box::new(irrefutable))))));
+        let id = Term::Lambda(Box::new(Term::Var(0, String::from("y"))), String::from("id"));
+
+        let matching_term = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(LEFT, String::from("Left"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
+        assert_eq!(pat.match_term(&matching_term), Some(single_sub(1, &id)));
+
+        let not_quite = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
+        assert_eq!(pat.match_term(&not_quite), None);
+    }
+
+    #[test]
+    fn test_nested_atom_pattern() {
+        let atom = Atom(Atom::Int(42));
+        // Just(Left(Right(42)))
+        let pat = Sum(JUST, String::from("Just"), Box::new(Sum(LEFT, String::from("Left"), Box::new(Sum(RIGHT, String::from("Right"), Box::new(atom))))));
+        let answer = Term::Atom(Atom::Int(42));
+
+        let matching_term = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(LEFT, String::from("Left"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(answer.clone()))))));
+        assert_eq!(pat.match_term(&matching_term), Some(HashMap::new()));
+
+        let wrong_structure = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(LEFT, String::from("Left"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(Term::Atom(Atom::Int(43))))))));
+        assert_eq!(pat.match_term(&wrong_structure), None);
+
+        let wrong_structure = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(answer.clone()))))));
+        assert_eq!(pat.match_term(&wrong_structure), None);
+    }
 }
