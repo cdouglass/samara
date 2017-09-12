@@ -106,6 +106,12 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             let (default_type, default_constraints) = get_constraints(default, &mut context, gen, constructor_bindings)?;
             let mut constraints = arg_constraints;
             constraints.extend(default_constraints);
+
+            for &(_, ref arm) in cases {
+                let (arm_type, arm_constraints) = get_constraints(arm, &mut context, gen, constructor_bindings)?;
+                constraints.push((arm_type, default_type.clone()));
+            }
+
             Ok((default_type, constraints))
         },
         Term::Let(_, ref value, ref body) => {
@@ -590,7 +596,7 @@ mod tests {
             let cases = vec![(pat0, int_to_term(0)), (pat1, int_to_term(1)), (pat2, int_to_term(2)), (pat3, int_to_term(3))];
 
             let term = Term::Case(Box::new(left_sum(&unit())), cases, Box::new(FIVE));
-            assert_type(&term, &Type::Int);
+            assert_type_with_context(&term, &Type::Int, &vec![], &mut gen, &sum_types);
         }
 
         #[test]
@@ -606,7 +612,7 @@ mod tests {
             let cases = vec![(pat0.clone(), apply(id, Term::Var(0, String::from("x")))), (pat1.clone(), FIVE)];
 
             let term = Term::Case(Box::new(left_sum(&FIVE)), cases.clone(), Box::new(FIVE));
-            assert_type(&term, &Type::Int);
+            assert_type_with_context(&term, &Type::Int, &vec![], &mut gen, &sum_types);
         }
 
         #[test]
