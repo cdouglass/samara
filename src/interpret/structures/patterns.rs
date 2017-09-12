@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use interpret::structures::Atom;
 use interpret::structures::Term;
 
+#[derive(Clone)]
+#[derive(PartialEq)]
 pub enum Pattern {
     Wildcard,
     Sum(usize, String, Box<Pattern>),

@@ -7,6 +7,7 @@ pub mod sums;
 pub mod patterns;
 
 use self::Op::*;
+use self::patterns::Pattern;
 
 /* Misc convenience functions */
 
@@ -49,7 +50,8 @@ pub enum Term {
     Conditional(Box<Term>, Box<Term>, Box<Term>), // predicate, true case, false case
     Let(String, Box<Term>, Option<Box<Term>>), // variable name, value, body (only one binding per let, for now)
     Constructor(usize, String),
-    Sum(usize, String, Box<Term>)
+    Sum(usize, String, Box<Term>),
+    Case(Vec<(Pattern, Term)>, Box<Term>) // require default case - no exhaustiveness check, so cannot rely on match
 }
 
 pub struct LetBinding {
@@ -114,7 +116,8 @@ impl Debug for Term {
                 }
             },
             Term::Constructor(_, ref constructor) => write!(f, "{}", constructor),
-            Term::Sum(_, ref constructor, ref value) => write!(f, "{} {:?}", constructor, value)
+            Term::Sum(_, ref constructor, ref value) => write!(f, "{} {:?}", constructor, value),
+            Term::Case(_, _) => unimplemented!()
         }
     }
 }
