@@ -101,7 +101,13 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
 
             Ok((true_type, constraints))
         },
-        Term::Case(_, _, _) => unimplemented!(),
+        Term::Case(ref arg, ref cases, ref default) => {
+            let (_, arg_constraints) = get_constraints(arg, &mut context, gen, constructor_bindings)?;
+            let (default_type, default_constraints) = get_constraints(default, &mut context, gen, constructor_bindings)?;
+            let mut constraints = arg_constraints;
+            constraints.extend(default_constraints);
+            Ok((default_type, constraints))
+        },
         Term::Let(_, ref value, ref body) => {
             context.push((gen.next().unwrap(), HashSet::new()));
             match *body {
