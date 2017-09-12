@@ -483,10 +483,6 @@ mod tests {
             t
         }
 
-        fn unit_term() -> Term {
-            Term::Atom(Atom::Unit)
-        }
-
         #[test]
         fn test_nullary_constructor() {
             let mut gen = GenTypeVar::new();
@@ -651,15 +647,15 @@ mod tests {
 
             let pat0 = Pattern::Sum(LEFT, String::from("Left"), Box::new(Pattern::Wildcard));
             let pat1 = Pattern::Sum(RIGHT, String::from("Right"), Box::new(Pattern::Wildcard));
-            let cases = vec![(pat0.clone(), unit_term()), (pat1.clone(), bool_to_term(true))];
+            let cases = vec![(pat0.clone(), unit()), (pat1.clone(), bool_to_term(true))];
 
-            let term = Term::Case(Box::new(right_sum(&unit())), cases.clone(), Box::new(unit_term()));
+            let term = Term::Case(Box::new(right_sum(&unit())), cases.clone(), Box::new(unit()));
             let expected = "Type error: Bool != ()";
             assert_type_err_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
 
             // mismatched default case
             let cases = vec![(pat0, bool_to_term(false)), (pat1, bool_to_term(true))];
-            let term = Term::Case(Box::new(right_sum(&unit())), cases, Box::new(unit_term()));
+            let term = Term::Case(Box::new(right_sum(&unit())), cases, Box::new(unit()));
             let expected = "Type error: Bool != ()";
             assert_type_err_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
         }
@@ -673,9 +669,9 @@ mod tests {
 
             let pat0 = Pattern::Sum(LEFT, String::from("Left"), Box::new(Pattern::Wildcard));
             let pat1 = Pattern::Sum(JUST, String::from("Just"), Box::new(Pattern::Wildcard));
-            let cases = vec![(pat0, unit_term()), (pat1, unit_term())];
+            let cases = vec![(pat0, unit()), (pat1, unit())];
 
-            let term = Term::Case(Box::new(right_sum(&unit())), cases, Box::new(unit_term()));
+            let term = Term::Case(Box::new(right_sum(&unit())), cases, Box::new(unit()));
             let expected = "Type error: Either t0 != Maybe t2";
             assert_type_err_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
         }
