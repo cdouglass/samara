@@ -4,6 +4,7 @@ use interpret::structures::Atom;
 use interpret::structures::Term;
 
 pub enum Pattern {
+    Wildcard,
     Sum(usize, String, Box<Pattern>),
     Atom(Atom),
     Var(usize, String)
@@ -12,6 +13,7 @@ pub enum Pattern {
 impl Pattern {
     fn match_term(&self, term: &Term) -> Option<HashMap<usize, Term>> {
         match (self, term) {
+            (&Pattern::Wildcard, _) => Some(HashMap::new()),
             (&Pattern::Sum(ref n, _, ref pat), &Term::Sum(ref m, _, ref val)) => {
                 if m == n {
                     pat.match_term(val)
@@ -49,6 +51,14 @@ mod tests {
         let mut sub = HashMap::new();
         sub.insert(n, value.clone());
         sub
+    }
+
+    #[test]
+    fn test_wildcard_pattern() {
+        let pat = Wildcard;
+        assert_eq!(pat.match_term(&Term::Atom(Atom::Int(5))), Some(HashMap::new()));
+        assert_eq!(pat.match_term(&Term::Atom(Atom::Int(42))), Some(HashMap::new()));
+        assert_eq!(pat.match_term(&Term::Atom(Atom::Bool(true))), Some(HashMap::new()));
     }
 
     #[test]
@@ -117,6 +127,20 @@ mod tests {
         let not_quite = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
         assert_eq!(pat.match_term(&not_quite), None);
     }
+
+    #[test]
+    fn test_nested_wildcard_pattern() {
+        // Just(Left(Right(_)))
+        let pat = Sum(JUST, String::from("Just"), Box::new(Sum(LEFT, String::from("Left"), Box::new(Sum(RIGHT, String::from("Right"), Box::new(Wildcard))))));
+        let id = Term::Lambda(Box::new(Term::Var(0, String::from("y"))), String::from("id"));
+
+        let matching_term = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(LEFT, String::from("Left"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
+        assert_eq!(pat.match_term(&matching_term), Some(HashMap::new()));
+
+        let not_quite = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
+        assert_eq!(pat.match_term(&not_quite), None);
+    }
+
 
     #[test]
     fn test_nested_atom_pattern() {
