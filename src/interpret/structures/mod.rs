@@ -51,7 +51,7 @@ pub enum Term {
     Let(String, Box<Term>, Option<Box<Term>>), // variable name, value, body (only one binding per let, for now)
     Constructor(usize, String),
     Sum(usize, String, Box<Term>),
-    Case(Vec<(Pattern, Term)>, Box<Term>) // require default case - no exhaustiveness check, so cannot rely on match
+    Case(Box<Term>, Vec<(Pattern, Term)>, Box<Term>) // argument, arms, and required default - no exhaustiveness check, so cannot rely on match
 }
 
 pub struct LetBinding {
@@ -117,7 +117,7 @@ impl Debug for Term {
             },
             Term::Constructor(_, ref constructor) => write!(f, "{}", constructor),
             Term::Sum(_, ref constructor, ref value) => write!(f, "{} {:?}", constructor, value),
-            Term::Case(_, _) => unimplemented!()
+            Term::Case(_, _, _) => unimplemented!()
         }
     }
 }

@@ -107,7 +107,7 @@ fn reduce(ast: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -
             let value_ = reduce(*value, session_bindings, sum_types)?;
             Ok(Sum(n, constructor, Box::new(value_)))
         }
-        Case(_, _) => unimplemented!(),
+        Case(_, _, _) => unimplemented!(),
         term => Ok(term)
     }
 }
@@ -142,7 +142,7 @@ fn apply(func: Term, arg: Term, session_bindings: &[LetBinding], sum_types: &Sum
             reduce(unshift_indices(sub_at_index(*body, &arg, 0), 1), session_bindings, sum_types)
         },
         // func is already reduced, so should not be in any of these forms
-        Conditional(_, _, _) | Var(_, _) | Let(_, _, _) | Constructor(_, _) | Sum(_, _, _) | Case(_, _) => {
+        Conditional(_, _, _) | Var(_, _) | Let(_, _, _) | Constructor(_, _) | Sum(_, _, _) | Case(_, _, _) => {
             Err(type_err)
         }
     }
@@ -157,7 +157,7 @@ fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
             let subbed_value = sub_at_index(*value, t, index);
             Sum(n, constructor, Box::new(subbed_value))
         },
-        Case(_, _) => unimplemented!(),
+        Case(_, _, _) => unimplemented!(),
         App(a, b) => {
             let subbed_a = sub_at_index(*a, t, index);
             let subbed_b = sub_at_index(*b, t, index);
@@ -192,7 +192,7 @@ fn shift_indices(term: &Term, distance: usize, cutoff: usize) -> Term {
         Atom(ref a) => Atom(a.clone()),
         Constructor(ref n, ref constructor) => Constructor(*n, constructor.clone()),
         Sum(ref n, ref constructor, ref value) => Sum(*n, constructor.clone(), value.clone()),
-        Case(_, _) => unimplemented!(),
+        Case(_, _, _) => unimplemented!(),
         App(ref a, ref b) => {
             let a_ = shift_indices(a, distance, cutoff);
             let b_ = shift_indices(b, distance, cutoff);
@@ -226,7 +226,7 @@ fn unshift_indices(term: Term, cutoff: usize) -> Term {
             let value_ = unshift_indices(*value, cutoff);
             Sum(n, constructor, Box::new(value_))
         },
-        Case(_, _) => unimplemented!(),
+        Case(_, _, _) => unimplemented!(),
         App(a, b) => {
             let a_ = unshift_indices(*a, cutoff);
             let b_ = unshift_indices(*b, cutoff);

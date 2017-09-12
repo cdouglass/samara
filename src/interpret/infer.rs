@@ -101,7 +101,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
 
             Ok((true_type, constraints))
         },
-        Term::Case(_, _) => unimplemented!(),
+        Term::Case(_, _, _) => unimplemented!(),
         Term::Let(_, ref value, ref body) => {
             context.push((gen.next().unwrap(), HashSet::new()));
             match *body {
@@ -571,7 +571,7 @@ mod tests {
 
         #[test]
         fn test_case_with_no_patterns() {
-            let term = Term::Case(vec![], Box::new(FIVE));
+            let term = Term::Case(Box::new(unit()), vec![], Box::new(FIVE));
             assert_type(&term, &Type::Int);
         }
 
@@ -587,7 +587,7 @@ mod tests {
             let pat3 = Pattern::Wildcard;
             let cases = vec![(pat0, int_to_term(0)), (pat1, int_to_term(1)), (pat2, int_to_term(2)), (pat3, int_to_term(3))];
 
-            let term = Term::Case(cases, Box::new(FIVE));
+            let term = Term::Case(Box::new(left_sum(&unit())), cases, Box::new(FIVE));
             assert_type(&term, &Type::Int);
         }
 
@@ -603,7 +603,7 @@ mod tests {
             let id = Term::Lambda(Box::new(Term::Var(0, String::from("x"))), String::from("x"));
             let cases = vec![(pat0.clone(), apply(id, Term::Var(0, String::from("x")))), (pat1.clone(), FIVE)];
 
-            let term = Term::Case(cases.clone(), Box::new(FIVE));
+            let term = Term::Case(Box::new(left_sum(&FIVE)), cases.clone(), Box::new(FIVE));
             assert_type(&term, &Type::Int);
         }
 
@@ -612,7 +612,7 @@ mod tests {
             let pat0 = Pattern::Atom(Atom::Int(0));
             let pat1 = Pattern::Atom(Atom::Int(1));
             let cases = vec![(pat0, bool_to_term(true)), (pat1, bool_to_term(false))];
-            let term = Term::Case(cases, Box::new(bool_to_term(true)));
+            let term = Term::Case(Box::new(FIVE), cases, Box::new(bool_to_term(true)));
             assert_type(&term, &Type::Bool);
         }
 
@@ -631,8 +631,16 @@ mod tests {
             let pat2 = Pattern::Sum(RIGHT, String::from("Right"), Box::new(Pattern::Var(0, String::from("x"))));
             let cases = vec![(pat0, x.clone()), (pat1, FIVE), (pat2, x)];
 
-            let term = Term::Case(cases, Box::new(FIVE));
+            let term = Term::Case(Box::new(left_sum(&Term::Sum(JUST, String::from("Just"), Box::new(FIVE)))), cases, Box::new(FIVE));
             assert_type_with_context(&term, &Type::Int, &vec![], &mut gen, &sum_types);
+        }
+
+        #[test]
+        fn test_mismatched_argument() {
+            let pat0 = Pattern::Atom(Atom::Int(0));
+            let cases = vec![(pat0, bool_to_term(true))];
+            let term = Term::Case(Box::new(bool_to_term(true)), cases, Box::new(bool_to_term(true)));
+            assert_type_err(&term, "Int != Bool");
         }
 
         #[test]
@@ -645,13 +653,13 @@ mod tests {
             let pat1 = Pattern::Sum(RIGHT, String::from("Right"), Box::new(Pattern::Wildcard));
             let cases = vec![(pat0.clone(), unit_term()), (pat1.clone(), bool_to_term(true))];
 
-            let term = Term::Case(cases.clone(), Box::new(unit_term()));
+            let term = Term::Case(Box::new(right_sum(&unit())), cases.clone(), Box::new(unit_term()));
             let expected = "Type error: Bool != ()";
             assert_type_err_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
 
             // mismatched default case
             let cases = vec![(pat0, bool_to_term(false)), (pat1, bool_to_term(true))];
-            let term = Term::Case(cases, Box::new(unit_term()));
+            let term = Term::Case(Box::new(right_sum(&unit())), cases, Box::new(unit_term()));
             let expected = "Type error: Bool != ()";
             assert_type_err_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
         }
@@ -667,7 +675,7 @@ mod tests {
             let pat1 = Pattern::Sum(JUST, String::from("Just"), Box::new(Pattern::Wildcard));
             let cases = vec![(pat0, unit_term()), (pat1, unit_term())];
 
-            let term = Term::Case(cases, Box::new(unit_term()));
+            let term = Term::Case(Box::new(right_sum(&unit())), cases, Box::new(unit_term()));
             let expected = "Type error: Either t0 != Maybe t2";
             assert_type_err_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
         }
