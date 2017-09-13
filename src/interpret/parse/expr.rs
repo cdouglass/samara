@@ -10,6 +10,7 @@ use interpret::SumTypeDefs;
 use interpret::structures::Atom;
 use interpret::structures::Op;
 use interpret::structures::Term;
+use interpret::structures::Type;
 use interpret::structures::patterns::Pattern;
 
 pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
@@ -223,7 +224,43 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
 }
 
 fn term_to_pattern(term: &Term, sum_types: &SumTypeDefs) -> Result<Pattern, String> {
-    Ok(Pattern::Wildcard)
+    match *term {
+        Term::Atom(ref atom) => Ok(Pattern::Atom(atom.clone())),
+        Term::Var(ref n, ref s) => {
+            if s == "_" {
+                Ok(Pattern::Wildcard)
+            } else {
+                Ok(Pattern::Var(*n, s.clone()))
+            }
+        },
+        Term::Sum(ref n, ref s, ref value) => {
+            let inner_pattern = term_to_pattern(value, sum_types)?;
+            Ok(Pattern::Sum(*n, s.clone(), Box::new(inner_pattern)))
+        },
+        // TODO clean this up, check whether constructor actually takes argument
+        // needs to look at constructor instead of sum because it doesn't actually parse sums directly now
+        Term::Constructor(ref n, ref s) => {
+            let constructor_binding = &sum_types.bindings[*n];
+            println!("{:?}", constructor_binding);
+            if let Type::Arrow(ref left, _) = constructor_binding.typ {
+                if *left.clone() != Type::Unit {
+                    println!("aaaaa, {:?}", left);
+                    return Err(format!("Invalid pattern {:?}", term));
+                }
+            }
+            Ok(Pattern::Sum(*n, s.clone(), Box::new(Pattern::Atom(Atom::Unit))))
+        },
+        Term::App(ref left, ref value) => {
+            if let Term::Constructor(ref n, ref s) = *left.clone() {
+                let inner_pattern = term_to_pattern(value, sum_types)?;
+                Ok(Pattern::Sum(*n, s.clone(), Box::new(inner_pattern)))
+            } else {
+                println!("ccccc");
+                Err(format!("Invalid pattern {:?}", term))
+            }
+        },
+        _ => Err(format!("Invalid pattern {:?}", term))
+    }
 }
 
 #[cfg(test)]
@@ -332,7 +369,7 @@ mod tests {
 
         let mut sum_types = SumTypeDefs::new();
         declare_sum_type("Maybe a = Just a | None", &mut GenTypeVar::new(), &mut sum_types).unwrap();
-        let mut tokens = match build_lexer("case Just 10 of 5; Just 0 -> 42; Just x -> x; None -> 100"){
+        let mut tokens = match build_lexer("case Just 10 of 5; Just 0 -> 42; Just x -> x; None -> 100; _ -> 777"){
             TS::Expr(ts) => ts,
             _ => panic!()
         };
@@ -341,7 +378,7 @@ mod tests {
             Term::Case(arg, cases, default) => {
                 assert_eq!(*arg, Term::App(Box::new(Term::Constructor(0, String::from("Just"))), Box::new(Term::Atom(Atom::Int(10)))));
                 assert_eq!(*default, Term::Atom(Atom::Int(5)));
-                assert_eq!(cases, vec![(Pattern::Wildcard, Term::Atom(Atom::Int(42))), (Pattern::Wildcard, Term::Var(0, String::from("x"))), (Pattern::Wildcard, Term::Atom(Atom::Int(100)))]);
+                assert_eq!(cases, vec![(Pattern::Sum(0, String::from("Just"), Box::new(Pattern::Atom(Atom::Int(0)))), Term::Atom(Atom::Int(42))), (Pattern::Sum(0, String::from("Just"), Box::new(Pattern::Var(0, String::from("x")))), Term::Var(0, String::from("x"))), (Pattern::Sum(1, String::from("None"), Box::new(Pattern::Atom(Atom::Unit))), Term::Atom(Atom::Int(100))), (Pattern::Wildcard, Term::Atom(Atom::Int(777)))]);
             },
             x => panic!("Expected case expression but got {:?}", x)
         }
