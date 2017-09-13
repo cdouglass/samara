@@ -57,7 +57,6 @@ impl<'a> Iterator for TokenStream<'a> {
         }
 
         fn is_identifier(c: char) -> bool {
-            println!("{:?}, {:?}", c, c == '_');
             c.is_alphabetic() || c == '_'
         }
 
@@ -119,7 +118,6 @@ impl<'a> Iterator for TokenStream<'a> {
             Some(Token::Identifier(ref s)) | Some(Token::Operator(ref s)) | Some(Token::Constructor(ref s)) => {
                 use self::Keyword::*;
                 use self::Token::*;
-                println!("Considering string {}", s);
                 match s.as_ref() {
                     "->"    => { return Some(Keyword(Arrow)); },
                     "="     => { return Some(Keyword(Assign)); },
@@ -138,7 +136,6 @@ impl<'a> Iterator for TokenStream<'a> {
             },
             _ => { }
         }
-        println!("{:?}", token);
         token
     }
 }
