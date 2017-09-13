@@ -1,3 +1,4 @@
+use interpret::declare_sum_type;
 use interpret::evaluate;
 use interpret::type_of;
 use interpret::GenTypeVar;
@@ -20,8 +21,7 @@ fn assert_evaluation_err(expr: &str, mut bindings: &mut Vec<LetBinding>, mut gen
     }
 }
 
-fn assert_evaluates_to_atom(expr: &str, mut bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar, expected: Atom) {
-    let sum_types = SumTypeDefs::new();
+fn assert_evaluates_to_atom_with_context(expr: &str, mut bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar, sum_types: &SumTypeDefs, expected: Atom) {
     match evaluate(expr, &mut bindings, gen, &sum_types).unwrap() {
         Term::Atom(a) => assert_eq!(a, expected),
         result => {
@@ -29,6 +29,10 @@ fn assert_evaluates_to_atom(expr: &str, mut bindings: &mut Vec<LetBinding>, mut 
             panic!()
         }
     }
+}
+
+fn assert_evaluates_to_atom(expr: &str, mut bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar, expected: Atom) {
+    assert_evaluates_to_atom_with_context(expr, bindings, gen, &SumTypeDefs::new(), expected);
 }
 
 #[test]
@@ -155,4 +159,18 @@ fn test_type_of_using_session_bindings() {
     evaluate("let x = (* 5 10)", &mut bindings, &mut gen, &sum_types).unwrap();
     let typ = type_of("x", &bindings, &mut gen, &sum_types).1.unwrap();
     assert_eq!(typ, Type::Int);
+}
+
+#[test]
+fn test_case_expression() {
+    let mut bindings = vec![];
+    let mut gen = GenTypeVar::new();
+    let mut sum_types = SumTypeDefs::new();
+    declare_sum_type("Maybe a = Just a | None", &mut gen, &mut sum_types).unwrap();
+    assert_evaluates_to_atom_with_context("case Just 10 of 100 ;Just 10 -> 42; Just x -> x; None -> 0", &mut bindings, &mut gen, &sum_types, Atom::Int(42));
+    assert_evaluates_to_atom_with_context("case Just 9 of 100; Just 10 -> 42; Just x -> x; None -> 0", &mut bindings, &mut gen, &sum_types, Atom::Int(9));
+    assert_evaluates_to_atom_with_context("case None of 100; Just 10 -> 42; Just x -> x; None -> 0", &mut bindings, &mut gen, &sum_types, Atom::Int(0));
+    assert_evaluates_to_atom_with_context("case None of 100; Just 10 -> 42; Just x -> x", &mut bindings, &mut gen, &sum_types, Atom::Int(100));
+
+    assert_evaluates_to_atom_with_context("case Just(Just 4) of 100; Just(Just x) -> (* x x); Just None -> 5", &mut bindings, &mut gen, &sum_types, Atom::Int(16));
 }
