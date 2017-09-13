@@ -10,6 +10,7 @@ use interpret::structures::Op;
 use interpret::structures::Term;
 use interpret::structures::Type;
 use interpret::structures::Type::*;
+use interpret::structures::patterns::Pattern;
 
 pub fn infer_type(term: &Term, bindings: &[LetBinding], mut gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<Type, String> {
     let mut context = vec![];
@@ -102,14 +103,19 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             Ok((true_type, constraints))
         },
         Term::Case(ref arg, ref cases, ref default) => {
-            let (_, arg_constraints) = get_constraints(arg, &mut context, gen, constructor_bindings)?;
+            let (arg_type, arg_constraints) = get_constraints(arg, &mut context, gen, constructor_bindings)?;
             let (default_type, default_constraints) = get_constraints(default, &mut context, gen, constructor_bindings)?;
             let mut constraints = arg_constraints;
             constraints.extend(default_constraints);
 
             for &(ref pattern, ref arm) in cases {
-                context.push((gen.next().unwrap(), HashSet::new()));
+                let (binding_type, pat_type, pat_constraints) = get_pattern_constraints(pattern, constructor_bindings, gen);
+                constraints.extend(pat_constraints);
+                constraints.push((arg_type.clone(), pat_type));
+
+                context.push((binding_type.clone(), HashSet::new()));
                 let (arm_type, arm_constraints) = get_constraints(arm, &mut context, gen, constructor_bindings)?;
+                constraints.extend(arm_constraints);
                 constraints.push((arm_type, default_type.clone()));
                 context.pop();
             }
@@ -191,7 +197,7 @@ fn unify(mut constraints: Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, Str
                     }
                     unify(constraints)
                 } else {
-                    Err(String::from(format!("Type error: {:?} != {:?}", st1.name, st2.name)))
+                    Err(String::from(format!("Type error: {} != {}", st1.name, st2.name)))
                 }
             } else if let (Arrow(s1, s2), Arrow(t1, t2)) = (s.clone(), t.clone()) {
                 constraints.push((*s1, *t1));
@@ -202,6 +208,38 @@ fn unify(mut constraints: Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, Str
             }
         },
         None => Ok(HashMap::new())
+    }
+}
+
+//(type of bound var, type of whole pattern, constraints introduced)
+fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(Type, HashSet<usize>)], mut gen: &mut GenTypeVar) -> (Type, Type, Vec<(Type, Type)>) {
+    match *pattern {
+        Pattern::Atom(ref atom) => {
+            let typ = base_type(atom);
+            (Type::Unit, typ, vec![])
+        },
+        Pattern::Sum(ref n, _, ref pat) => {
+            let (ref ctor_typ, ref universals) = constructor_bindings[*n];
+            let fresh_ctor_typ = instantiate(ctor_typ.clone(), universals, gen);
+            if let Arrow(ref left, ref right) = fresh_ctor_typ {
+                let (bound_typ, inner_typ, mut constraints) = get_pattern_constraints(pat, constructor_bindings, gen);
+                constraints.push((*left.clone(), inner_typ));
+                (bound_typ, *right.clone(), constraints)
+            } else {
+                // TODO nullary constructor should have a separate term/pattern variant
+                // as is, it is possible to construct wrong patterns like None(5)
+                // and this will ignore them
+                (Type::Unit, fresh_ctor_typ, vec![])
+            }
+        },
+        Pattern::Var(_, _) => {
+            let typ = gen.next().unwrap();
+            (typ.clone(), typ, vec![])
+        },
+        Pattern::Wildcard => {
+            let typ = gen.next().unwrap();
+            (Type::Unit, typ, vec![])
+        }
     }
 }
 
@@ -650,7 +688,7 @@ mod tests {
             let pat0 = Pattern::Atom(Atom::Int(0));
             let cases = vec![(pat0, bool_to_term(true))];
             let term = Term::Case(Box::new(bool_to_term(true)), cases, Box::new(bool_to_term(true)));
-            assert_type_err(&term, "Int != Bool");
+            assert_type_err(&term, "Type error: Bool != Int");
         }
 
         #[test]
@@ -686,7 +724,7 @@ mod tests {
             let cases = vec![(pat0, unit()), (pat1, unit())];
 
             let term = Term::Case(Box::new(right_sum(&unit())), cases, Box::new(unit()));
-            let expected = "Type error: Either t0 != Maybe t2";
+            let expected = "Type error: Either != Maybe";
             assert_type_err_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
         }
     }
