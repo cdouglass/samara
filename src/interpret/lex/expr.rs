@@ -10,7 +10,6 @@ pub enum Token {
     Close,
     Lambda,
     Unit,
-    Wildcard,
     Keyword(Keyword),
     Constructor(String),
     Identifier(String),
@@ -67,7 +66,7 @@ impl<'a> Iterator for TokenStream<'a> {
             // https://stackoverflow.com/questions/26920789/unable-to-borrow-an-iterator-as-mutable-more-than-once-at-a-time
             let ch = self.it.peek().cloned();
             match token {
-                Some(Token::Close) | Some(Token::Lambda) | Some(Token::Unit) | Some(Token::Wildcard) | Some(Token::Keyword(_)) => {
+                Some(Token::Close) | Some(Token::Lambda) | Some(Token::Unit) | Some(Token::Keyword(_)) => {
                     return token;
                 },
                 Some(Token::Open) => {
@@ -130,7 +129,6 @@ impl<'a> Iterator for TokenStream<'a> {
                     "of"    => { return Some(Keyword(Of)); },
                     "True"  => { return Some(Keyword(True)); },
                     "False" => { return Some(Keyword(False)); },
-                    "_"     => { return Some(Wildcard); },
                     _       => { }
                 }
             },

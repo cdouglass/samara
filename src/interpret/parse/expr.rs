@@ -86,10 +86,16 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             },
             Some(Token::Identifier(s)) => {
                 tokens.next();
-                let mut stack = identifier_stack.iter().rev();
-                match stack.position(|x| x == &s) {
-                    Some(k) => Ok(Term::Var(k, s)),
-                    None => Err(String::from(format!("Error: Undefined variable {}", s)))
+                if identifier_stack.last() == Some(&String::from("_")) {
+                    identifier_stack.pop();
+                    identifier_stack.push(s.clone());
+                    Ok(Term::Var(0, s))
+                } else {
+                    let mut stack = identifier_stack.iter().rev();
+                    match stack.position(|x| x == &s) {
+                        Some(k) => Ok(Term::Var(k, s)),
+                        None => Err(String::from(format!("Error: Undefined variable {}", s)))
+                    }
                 }
             },
             Some(Token::Number(s)) => {
@@ -101,9 +107,6 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             Some(Token::Operator(s)) => {
                 tokens.next();
                 Op::from_str(&s).map(|op| Term::Atom(Atom::BuiltIn(op)))
-            },
-            Some(Token::Wildcard) => {
-                return Err(String::from(format!("Error: Wildcard token (_) found outside pattern")));
             },
             None => {
                 if *token_stack == vec![Token::Keyword(In)] || token_stack.is_empty() {
@@ -186,7 +189,18 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
         token_stack.push(Token::Keyword(Semicolon));
         token_stack.push(Token::Keyword(Arrow));
 
-        let _ = parse(tokens, token_stack, identifier_stack, sum_types);
+        /*
+         * Push wildcard marker as identifier, then get pattern as term (and when spotting a
+         * variable, check for '_' on top of ID stack and fill it in if so instead of potentially
+         * erroring because it's undefined), then turn term into pattern.
+         *
+         * What will happen if I try to name an actual variable '_'?
+         *
+         * TODO Clean this up later.
+         */
+        identifier_stack.push(String::from("_"));
+        let pattern_term = parse(tokens, token_stack, identifier_stack, sum_types)?;
+        let pattern = term_to_pattern(&pattern_term, sum_types)?;
 
         // consume -> if above didn't already
         match tokens.peek().cloned() {
@@ -199,16 +213,17 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
             _ => { }
         }
 
-        // skip right past the pattern (which may error for now)
-        // pretend we bound something
-        identifier_stack.push(String::from("x"));
         let arm = parse(tokens, token_stack, identifier_stack, sum_types)?;
         identifier_stack.pop();
 
-        cases.push((Pattern::Wildcard, arm));
+        cases.push((pattern, arm));
     }
 
     Ok(Term::Case(Box::new(arg), cases, Box::new(default)))
+}
+
+fn term_to_pattern(term: &Term, sum_types: &SumTypeDefs) -> Result<Pattern, String> {
+    Ok(Pattern::Wildcard)
 }
 
 #[cfg(test)]
@@ -309,10 +324,6 @@ mod tests {
         assert_parse_err("(+ 5 (8)", "Unexpected end of input");
     }
 
-    #[test]
-    fn test_misplaced_wildcard() {
-        assert_parse_err("+ _ 5", "Error: Wildcard token (_) found outside pattern");
-    }
     #[test]
     fn test_parses_case() {
         use interpret::declare_sum_type;
