@@ -65,6 +65,7 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
                     True  => { Ok(Term::Atom(Atom::Bool(true))) },
                     False => { Ok(Term::Atom(Atom::Bool(false))) },
                     Let   => parse_let(tokens, &mut token_stack, &mut identifier_stack, sum_types),
+                    Case  => parse_case(tokens, &mut token_stack, &mut identifier_stack, sum_types),
                     k    => {
                         if token_stack.pop() == Some(Token::Keyword(k)) {
                             break;
@@ -97,6 +98,9 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             Some(Token::Operator(s)) => {
                 tokens.next();
                 Op::from_str(&s).map(|op| Term::Atom(Atom::BuiltIn(op)))
+            },
+            Some(Token::Wildcard) => {
+                return Err(String::from(format!("Error: Wildcard token (_) found outside pattern")));
             },
             None => {
                 if !token_stack.is_empty() && *token_stack != vec![Token::Keyword(In)] {
@@ -153,6 +157,17 @@ fn parse_let(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
         },
         _ => syntax_err
     }
+}
+
+fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
+    token_stack.push(Token::Keyword(Of));
+    let arg = parse(tokens, token_stack, identifier_stack, sum_types)?;
+
+    token_stack.push(Token::Keyword(Semicolon));
+    let default = parse(tokens, token_stack, identifier_stack, sum_types)?;
+
+    Ok(Term::Case(Box::new(arg), vec![], Box::new(default)))
+    //TODO branches
 }
 
 #[cfg(test)]
@@ -251,5 +266,27 @@ mod tests {
     fn test_unbalanced_delimiters() {
         assert_parse_err("(+ 5 8))", "Unexpected CLOSE delimiter");
         assert_parse_err("(+ 5 (8)", "Unexpected end of input");
+    }
+
+    #[test]
+    fn test_misplaced_wildcard() {
+        assert_parse_err("+ _ 5", "Error: Wildcard token (_) found outside pattern");
+    }
+    #[test]
+    fn test_parses_case() {
+        use interpret::declare_sum_type;
+        use interpret::infer::GenTypeVar;
+
+        let mut sum_types = SumTypeDefs::new();
+        declare_sum_type("Maybe a = Just a | None", &mut GenTypeVar::new(), &mut sum_types).unwrap();
+        let mut tokens = match build_lexer("case Just 10 of 5; Just 0 -> 42; Just x -> x; None -> 100"){
+            TS::Expr(ts) => ts,
+            _ => panic!()
+        };
+        let ast = parse(&mut tokens, &mut vec![], &mut vec![], &sum_types).unwrap();
+        // TODO assert a piece at a time
+        // * argument
+        // * default
+        // * then the cases
     }
 }

@@ -10,6 +10,7 @@ pub enum Token {
     Close,
     Lambda,
     Unit,
+    Wildcard,
     Keyword(Keyword),
     Constructor(String),
     Identifier(String),
@@ -22,6 +23,7 @@ pub enum Token {
 #[derive(Clone)]
 pub enum Keyword {
     Arrow,
+    Semicolon,
     Assign,
     Let,
     In,
@@ -29,7 +31,9 @@ pub enum Keyword {
     Then,
     Else,
     True,
-    False
+    False,
+    Case,
+    Of
 }
 
 pub struct TokenStream<'a> {
@@ -53,6 +57,7 @@ impl<'a> Iterator for TokenStream<'a> {
         }
 
         fn is_identifier(c: char) -> bool {
+            println!("{:?}, {:?}", c, c == '_');
             c.is_alphabetic() || c == '_'
         }
 
@@ -63,7 +68,7 @@ impl<'a> Iterator for TokenStream<'a> {
             // https://stackoverflow.com/questions/26920789/unable-to-borrow-an-iterator-as-mutable-more-than-once-at-a-time
             let ch = self.it.peek().cloned();
             match token {
-                Some(Token::Close) | Some(Token::Lambda) | Some(Token::Unit) | Some(Token::Keyword(_)) => {
+                Some(Token::Close) | Some(Token::Lambda) | Some(Token::Unit) | Some(Token::Wildcard) | Some(Token::Keyword(_)) => {
                     return token;
                 },
                 Some(Token::Open) => {
@@ -92,12 +97,13 @@ impl<'a> Iterator for TokenStream<'a> {
                         Some('(')  => { token = Some(Token::Open) },
                         Some(')')  => { token = Some(Token::Close) },
                         Some('\\') => { token = Some(Token::Lambda) },
+                        Some(';') => { token = Some(Token::Keyword(Keyword::Semicolon)) },
                         Some(c) => {
                             if is_operator(c) {
                                 token = Some(Token::Operator(c.to_string()));
                             } else if c.is_uppercase() {
                                 token = Some(Token::Constructor(c.to_string()));
-                            } else if c.is_alphabetic() {
+                            } else if is_identifier(c) {
                                 token = Some(Token::Identifier(c.to_string()));
                             } else if c.is_numeric() {
                                 token = Some(Token::Number(c.to_string()));
@@ -113,6 +119,7 @@ impl<'a> Iterator for TokenStream<'a> {
             Some(Token::Identifier(ref s)) | Some(Token::Operator(ref s)) | Some(Token::Constructor(ref s)) => {
                 use self::Keyword::*;
                 use self::Token::*;
+                println!("Considering string {}", s);
                 match s.as_ref() {
                     "->"    => { return Some(Keyword(Arrow)); },
                     "="     => { return Some(Keyword(Assign)); },
@@ -121,13 +128,17 @@ impl<'a> Iterator for TokenStream<'a> {
                     "if"    => { return Some(Keyword(If)); },
                     "then"  => { return Some(Keyword(Then)); },
                     "else"  => { return Some(Keyword(Else)); },
+                    "case"  => { return Some(Keyword(Case)); },
+                    "of"    => { return Some(Keyword(Of)); },
                     "True"  => { return Some(Keyword(True)); },
                     "False" => { return Some(Keyword(False)); },
+                    "_"     => { return Some(Wildcard); },
                     _       => { }
                 }
             },
             _ => { }
         }
+        println!("{:?}", token);
         token
     }
 }
