@@ -500,7 +500,7 @@ mod tests {
         const JUST: usize = 2;
         const NONE: usize = 3;
 
-        fn nullary_sum_type(mut gen: &mut GenTypeVar, mut sum_types: &mut SumTypeDefs) {
+        fn nullary_sum_type(mut sum_types: &mut SumTypeDefs) {
             let variants = vec![(String::from("Foo"), Unit)];
             sum_types.add_type("Baz", variants, vec![]).unwrap();
         }
@@ -531,7 +531,7 @@ mod tests {
         fn maybe(mut gen: &mut GenTypeVar, mut sum_types: &mut SumTypeDefs) -> Type {
             let t = gen.next().unwrap();
             let variants = vec![(String::from("Just"), t.clone()), (String::from("None"), t.clone())];
-            sum_types.add_type("Maybe", variants, vec![t.clone()]);
+            sum_types.add_type("Maybe", variants, vec![t.clone()]).unwrap();
             t
         }
 
@@ -539,7 +539,7 @@ mod tests {
         fn test_nullary_constructor() {
             let mut gen = GenTypeVar::new();
             let mut sum_types = SumTypeDefs::new();
-            nullary_sum_type(&mut gen, &mut sum_types);
+            nullary_sum_type(&mut sum_types);
 
             let term = Term::Constructor(0, String::from("Foo"));
             let typ = Sum(SumType::new("Baz", vec![(String::from("Foo"), Unit)], vec![]));
@@ -580,7 +580,7 @@ mod tests {
         fn test_sum_from_nullary_constructor() {
             let mut gen = GenTypeVar::new();
             let mut sum_types = SumTypeDefs::new();
-            nullary_sum_type(&mut gen, &mut sum_types);
+            nullary_sum_type(&mut sum_types);
 
             let term = Term::Sum(0, String::from("Foo"), Box::new(Term::Atom(Atom::Unit)));
             let typ = Sum(SumType::new("Baz", vec![(String::from("Foo"), Unit)], vec![]));
@@ -627,7 +627,7 @@ mod tests {
         fn test_valid_case_expression() {
             let mut gen = GenTypeVar::new();
             let mut sum_types = SumTypeDefs::new();
-            let (t0, t1) = either(&mut gen, &mut sum_types);
+            let (_, _) = either(&mut gen, &mut sum_types);
 
             let pat0 = Pattern::Sum(LEFT, String::from("Left"), Box::new(Pattern::Wildcard));
             let pat1 = Pattern::Sum(RIGHT, String::from("Right"), Box::new(Pattern::Wildcard));
@@ -644,7 +644,7 @@ mod tests {
             // Either Int Bool -> Int
             let mut gen = GenTypeVar::new();
             let mut sum_types = SumTypeDefs::new();
-            let (t0, t1) = either(&mut gen, &mut sum_types);
+            let (_, _) = either(&mut gen, &mut sum_types);
 
             let pat0 = Pattern::Sum(LEFT, String::from("Left"), Box::new(Pattern::Var(0, String::from("x"))));
             let pat1 = Pattern::Sum(RIGHT, String::from("Right"), Box::new(Pattern::Wildcard));
@@ -669,8 +669,8 @@ mod tests {
             // Either (Maybe Int) Int -> Int
             let mut gen = GenTypeVar::new();
             let mut sum_types = SumTypeDefs::new();
-            let (t0, t1) = either(&mut gen, &mut sum_types);
-            let t2 = maybe(&mut gen, &mut sum_types);
+            let (_, _) = either(&mut gen, &mut sum_types);
+            let _ = maybe(&mut gen, &mut sum_types);
 
             let x = Term::Var(0, String::from("x"));
 
@@ -695,7 +695,7 @@ mod tests {
         fn test_mismatched_arms() {
             let mut gen = GenTypeVar::new();
             let mut sum_types = SumTypeDefs::new();
-            let (t0, t1) = either(&mut gen, &mut sum_types);
+            let (_, _) = either(&mut gen, &mut sum_types);
 
             let pat0 = Pattern::Sum(LEFT, String::from("Left"), Box::new(Pattern::Wildcard));
             let pat1 = Pattern::Sum(RIGHT, String::from("Right"), Box::new(Pattern::Wildcard));
@@ -716,8 +716,8 @@ mod tests {
         fn test_mismatched_patterns() {
             let mut gen = GenTypeVar::new();
             let mut sum_types = SumTypeDefs::new();
-            let (t0, t1) = either(&mut gen, &mut sum_types);
-            let t2 = maybe(&mut gen, &mut sum_types);
+            let (_, _) = either(&mut gen, &mut sum_types);
+            let _ = maybe(&mut gen, &mut sum_types);
 
             let pat0 = Pattern::Sum(LEFT, String::from("Left"), Box::new(Pattern::Wildcard));
             let pat1 = Pattern::Sum(JUST, String::from("Just"), Box::new(Pattern::Wildcard));
