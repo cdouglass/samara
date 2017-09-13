@@ -107,9 +107,11 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             let mut constraints = arg_constraints;
             constraints.extend(default_constraints);
 
-            for &(_, ref arm) in cases {
+            for &(ref pattern, ref arm) in cases {
+                context.push((gen.next().unwrap(), HashSet::new()));
                 let (arm_type, arm_constraints) = get_constraints(arm, &mut context, gen, constructor_bindings)?;
                 constraints.push((arm_type, default_type.clone()));
+                context.pop();
             }
 
             Ok((default_type, constraints))
