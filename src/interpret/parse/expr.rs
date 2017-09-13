@@ -6,10 +6,11 @@ use interpret::lex::expr::TokenStream;
 use interpret::lex::expr::Token;
 use interpret::lex::expr::Keyword::*;
 
+use interpret::SumTypeDefs;
 use interpret::structures::Atom;
 use interpret::structures::Op;
-use interpret::SumTypeDefs;
 use interpret::structures::Term;
+use interpret::structures::patterns::Pattern;
 
 pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
     let close_err = Err(String::from("Unexpected CLOSE delimiter"));
@@ -60,16 +61,18 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             Some(Token::Keyword(k)) => {
                 tokens.next();
                 match k {
-                    Arrow => { return lambda_syntax_err; },
                     If    => parse_conditional(tokens, &mut token_stack, &mut identifier_stack, sum_types),
                     True  => { Ok(Term::Atom(Atom::Bool(true))) },
                     False => { Ok(Term::Atom(Atom::Bool(false))) },
                     Let   => parse_let(tokens, &mut token_stack, &mut identifier_stack, sum_types),
                     Case  => parse_case(tokens, &mut token_stack, &mut identifier_stack, sum_types),
                     k    => {
-                        if token_stack.pop() == Some(Token::Keyword(k)) {
+                        let tok = token_stack.pop();
+                        if tok == Some(Token::Keyword(k.clone())) {
                             break;
-                        } else { return syntax_err; }
+                        } else {
+                            return syntax_err;
+                        }
                     },
                 }
             },
@@ -103,9 +106,13 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
                 return Err(String::from(format!("Error: Wildcard token (_) found outside pattern")));
             },
             None => {
-                if !token_stack.is_empty() && *token_stack != vec![Token::Keyword(In)] {
+                if *token_stack == vec![Token::Keyword(In)] || token_stack.is_empty() {
+                    break;
+                } else if let Some(&Token::Keyword(Semicolon)) = token_stack.last() {
+                    break;
+                } else {
                     return end_of_input_err;
-                } else { break; }
+                }
             }
         };
 
@@ -120,7 +127,9 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
 
     match term_so_far {
         Some(term) => Ok(term),
-        None => end_of_input_err
+        None => {
+            end_of_input_err
+        }
     }
 }
 
@@ -166,8 +175,40 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
     token_stack.push(Token::Keyword(Semicolon));
     let default = parse(tokens, token_stack, identifier_stack, sum_types)?;
 
-    Ok(Term::Case(Box::new(arg), vec![], Box::new(default)))
-    //TODO branches
+    let mut cases = vec![];
+
+    loop {
+        if let Some(&Token::Keyword(Semicolon)) = token_stack.last() {
+            break;
+        } else if let None = tokens.peek() {
+            break;
+        }
+        token_stack.push(Token::Keyword(Semicolon));
+        token_stack.push(Token::Keyword(Arrow));
+
+        let _ = parse(tokens, token_stack, identifier_stack, sum_types);
+
+        // consume -> if above didn't already
+        match tokens.peek().cloned() {
+            Some(Token::Keyword(Arrow)) => {
+                if token_stack.last() == Some(&Token::Keyword(Arrow)) {
+                    token_stack.pop();
+                    tokens.next();
+                }
+            },
+            _ => { }
+        }
+
+        // skip right past the pattern (which may error for now)
+        // pretend we bound something
+        identifier_stack.push(String::from("x"));
+        let arm = parse(tokens, token_stack, identifier_stack, sum_types)?;
+        identifier_stack.pop();
+
+        cases.push((Pattern::Wildcard, arm));
+    }
+
+    Ok(Term::Case(Box::new(arg), cases, Box::new(default)))
 }
 
 #[cfg(test)]
@@ -276,6 +317,7 @@ mod tests {
     fn test_parses_case() {
         use interpret::declare_sum_type;
         use interpret::infer::GenTypeVar;
+        use interpret::structures::patterns::Pattern;
 
         let mut sum_types = SumTypeDefs::new();
         declare_sum_type("Maybe a = Just a | None", &mut GenTypeVar::new(), &mut sum_types).unwrap();
@@ -284,9 +326,13 @@ mod tests {
             _ => panic!()
         };
         let ast = parse(&mut tokens, &mut vec![], &mut vec![], &sum_types).unwrap();
-        // TODO assert a piece at a time
-        // * argument
-        // * default
-        // * then the cases
+        match ast {
+            Term::Case(arg, cases, default) => {
+                assert_eq!(*arg, Term::App(Box::new(Term::Constructor(0, String::from("Just"))), Box::new(Term::Atom(Atom::Int(10)))));
+                assert_eq!(*default, Term::Atom(Atom::Int(5)));
+                assert_eq!(cases, vec![(Pattern::Wildcard, Term::Atom(Atom::Int(42))), (Pattern::Wildcard, Term::Var(0, String::from("x"))), (Pattern::Wildcard, Term::Atom(Atom::Int(100)))]);
+            },
+            x => panic!("Expected case expression but got {:?}", x)
+        }
     }
 }
