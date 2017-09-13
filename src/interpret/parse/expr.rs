@@ -241,10 +241,8 @@ fn term_to_pattern(term: &Term, sum_types: &SumTypeDefs) -> Result<Pattern, Stri
         // needs to look at constructor instead of sum because it doesn't actually parse sums directly now
         Term::Constructor(ref n, ref s) => {
             let constructor_binding = &sum_types.bindings[*n];
-            println!("{:?}", constructor_binding);
             if let Type::Arrow(ref left, _) = constructor_binding.typ {
                 if *left.clone() != Type::Unit {
-                    println!("aaaaa, {:?}", left);
                     return Err(format!("Invalid pattern {:?}", term));
                 }
             }
@@ -255,7 +253,6 @@ fn term_to_pattern(term: &Term, sum_types: &SumTypeDefs) -> Result<Pattern, Stri
                 let inner_pattern = term_to_pattern(value, sum_types)?;
                 Ok(Pattern::Sum(*n, s.clone(), Box::new(inner_pattern)))
             } else {
-                println!("ccccc");
                 Err(format!("Invalid pattern {:?}", term))
             }
         },

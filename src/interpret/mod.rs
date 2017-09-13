@@ -10,6 +10,7 @@ use self::structures::Op::*;
 use self::structures::Term;
 use self::structures::Term::*;
 use self::structures::Type;
+pub use self::structures::patterns::Match;
 pub use self::structures::sums::SumType;
 pub use self::structures::sums::SumTypeDefs;
 
@@ -107,7 +108,21 @@ fn reduce(ast: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -
             let value_ = reduce(*value, session_bindings, sum_types)?;
             Ok(Sum(n, constructor, Box::new(value_)))
         }
-        Case(_, _, _) => unimplemented!(),
+        Case(arg, cases, default) => {
+            for &(ref pattern, ref arm) in cases.iter() {
+                match pattern.match_term(&reduce(*arg.clone(), session_bindings, sum_types)?) {
+                    Some(Match::Binding(n, value)) => {
+                        let subbed_arm = sub_at_index(arm.clone(), &value, n);
+                        return reduce(unshift_indices(subbed_arm, 1), session_bindings, sum_types);
+                    },
+                    Some(Match::Plain) => {
+                        return reduce(arm.clone(), session_bindings, sum_types);
+                    },
+                    None => { }
+                }
+            }
+            reduce(*default.clone(), session_bindings, sum_types)
+        },
         term => Ok(term)
     }
 }
@@ -157,7 +172,17 @@ fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
             let subbed_value = sub_at_index(*value, t, index);
             Sum(n, constructor, Box::new(subbed_value))
         },
-        Case(_, _, _) => unimplemented!(),
+        Case(arg, cases, default) => {
+            let new_arg = sub_at_index(*arg, t, index);
+            let new_default = sub_at_index(*default, t, index);
+
+            let mut new_cases = vec![];
+            for &(ref pattern, ref arm) in cases.iter() {
+                let new_arm = sub_at_index(arm.clone(), t, index + 1);
+                new_cases.push((pattern.clone(), new_arm));
+            }
+            Case(Box::new(new_arg), new_cases, Box::new(new_default))
+        },
         App(a, b) => {
             let subbed_a = sub_at_index(*a, t, index);
             let subbed_b = sub_at_index(*b, t, index);
@@ -192,7 +217,16 @@ fn shift_indices(term: &Term, distance: usize, cutoff: usize) -> Term {
         Atom(ref a) => Atom(a.clone()),
         Constructor(ref n, ref constructor) => Constructor(*n, constructor.clone()),
         Sum(ref n, ref constructor, ref value) => Sum(*n, constructor.clone(), value.clone()),
-        Case(_, _, _) => unimplemented!(),
+        Case(ref arg, ref cases, ref default) => {
+            let new_arg = shift_indices(arg, distance, cutoff);
+            let new_default = shift_indices(default, distance, cutoff);
+            let mut new_cases = vec![];
+            for &(ref pattern, ref arm) in cases.iter() {
+                let new_arm = shift_indices(arm, distance, cutoff + 1);
+                new_cases.push((pattern.clone(), new_arm));
+            }
+            Case(Box::new(new_arg), new_cases, Box::new(new_default))
+        },
         App(ref a, ref b) => {
             let a_ = shift_indices(a, distance, cutoff);
             let b_ = shift_indices(b, distance, cutoff);
@@ -226,7 +260,16 @@ fn unshift_indices(term: Term, cutoff: usize) -> Term {
             let value_ = unshift_indices(*value, cutoff);
             Sum(n, constructor, Box::new(value_))
         },
-        Case(_, _, _) => unimplemented!(),
+        Case(arg, cases, default) => {
+            let new_arg = unshift_indices(*arg, cutoff);
+            let new_default = unshift_indices(*default, cutoff);
+            let mut new_cases = vec![];
+            for &(ref pattern, ref arm) in cases.iter() {
+                let new_arm = unshift_indices(arm.clone(), cutoff + 1);
+                new_cases.push((pattern.clone(), new_arm));
+            }
+            Case(Box::new(new_arg), new_cases, Box::new(new_default))
+        },
         App(a, b) => {
             let a_ = unshift_indices(*a, cutoff);
             let b_ = unshift_indices(*b, cutoff);

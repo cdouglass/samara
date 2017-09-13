@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use interpret::structures::Atom;
 use interpret::structures::Term;
 
@@ -13,10 +11,18 @@ pub enum Pattern {
     Var(usize, String)
 }
 
+#[derive(Debug)]
+#[derive(Clone)]
+#[derive(PartialEq)]
+pub enum Match {
+    Binding(usize, Term),
+    Plain
+}
+
 impl Pattern {
-    fn match_term(&self, term: &Term) -> Option<HashMap<usize, Term>> {
+    pub fn match_term(&self, term: &Term) -> Option<Match> {
         match (self, term) {
-            (&Pattern::Wildcard, _) => Some(HashMap::new()),
+            (&Pattern::Wildcard, _) => Some(Match::Plain),
             (&Pattern::Sum(ref n, _, ref pat), &Term::Sum(ref m, _, ref val)) => {
                 if m == n {
                     pat.match_term(val)
@@ -24,13 +30,11 @@ impl Pattern {
             },
             (&Pattern::Atom(ref a), &Term::Atom(ref b)) => {
                 if a == b {
-                    Some(HashMap::new())
+                    Some(Match::Plain)
                 } else { None }
             },
             (&Pattern::Var(ref n, _), _) => {
-                let mut sub = HashMap::new();
-                sub.insert(*n, term.clone());
-                Some(sub)
+                Some(Match::Binding(*n, term.clone()))
             },
             _ => None
         }
@@ -50,39 +54,33 @@ mod tests {
     const LEFT : usize = 2;
     const RIGHT : usize = 3;
 
-    fn single_sub(n: usize, value: &Term) -> HashMap<usize, Term> {
-        let mut sub = HashMap::new();
-        sub.insert(n, value.clone());
-        sub
-    }
-
     #[test]
     fn test_wildcard_pattern() {
         let pat = Wildcard;
-        assert_eq!(pat.match_term(&Term::Atom(Atom::Int(5))), Some(HashMap::new()));
-        assert_eq!(pat.match_term(&Term::Atom(Atom::Int(42))), Some(HashMap::new()));
-        assert_eq!(pat.match_term(&Term::Atom(Atom::Bool(true))), Some(HashMap::new()));
+        assert_eq!(pat.match_term(&Term::Atom(Atom::Int(5))), Some(Match::Plain));
+        assert_eq!(pat.match_term(&Term::Atom(Atom::Int(42))), Some(Match::Plain));
+        assert_eq!(pat.match_term(&Term::Atom(Atom::Bool(true))), Some(Match::Plain));
     }
 
     #[test]
     fn test_atom_pattern() {
         let pat = Atom(Atom::Int(5));
-        assert_eq!(pat.match_term(&Term::Atom(Atom::Int(5))), Some(HashMap::new()));
+        assert_eq!(pat.match_term(&Term::Atom(Atom::Int(5))), Some(Match::Plain));
         assert_eq!(pat.match_term(&Term::Atom(Atom::Int(42))), None);
         assert_eq!(pat.match_term(&Term::Atom(Atom::Bool(true))), None);
 
         let pat = Atom(Atom::Bool(true));
-        assert_eq!(pat.match_term(&Term::Atom(Atom::Bool(true))), Some(HashMap::new()));
+        assert_eq!(pat.match_term(&Term::Atom(Atom::Bool(true))), Some(Match::Plain));
         assert_eq!(pat.match_term(&Term::Atom(Atom::Bool(false))), None);
         assert_eq!(pat.match_term(&Term::Atom(Atom::Int(42))), None);
 
         let pat = Atom(Atom::Unit);
-        assert_eq!(pat.match_term(&Term::Atom(Atom::Unit)), Some(HashMap::new()));
+        assert_eq!(pat.match_term(&Term::Atom(Atom::Unit)), Some(Match::Plain));
         assert_eq!(pat.match_term(&Term::Atom(Atom::Bool(false))), None);
         assert_eq!(pat.match_term(&Term::Atom(Atom::Int(42))), None);
 
         let pat = Atom(Atom::BuiltIn(Op::Mul));
-        assert_eq!(pat.match_term(&Term::Atom(Atom::BuiltIn(Op::Mul))), Some(HashMap::new()));
+        assert_eq!(pat.match_term(&Term::Atom(Atom::BuiltIn(Op::Mul))), Some(Match::Plain));
         assert_eq!(pat.match_term(&Term::Atom(Atom::BuiltIn(Op::Add))), None);
         assert_eq!(pat.match_term(&Term::Atom(Atom::Int(42))), None);
     }
@@ -95,10 +93,10 @@ mod tests {
         let none = Term::Sum(NONE, String::from("None"), Box::new(Term::Atom(Atom::Unit)));
         let unit = Term::Atom(Atom::Unit);
 
-        assert_eq!(irrefutable.match_term(&five), Some(single_sub(1, &five)));
-        assert_eq!(irrefutable.match_term(&square), Some(single_sub(1, &square)));
-        assert_eq!(irrefutable.match_term(&none), Some(single_sub(1, &none)));
-        assert_eq!(irrefutable.match_term(&unit), Some(single_sub(1, &unit)));
+        assert_eq!(irrefutable.match_term(&five), Some(Match::Binding(1, five)));
+        assert_eq!(irrefutable.match_term(&square), Some(Match::Binding(1, square)));
+        assert_eq!(irrefutable.match_term(&none), Some(Match::Binding(1, none)));
+        assert_eq!(irrefutable.match_term(&unit), Some(Match::Binding(1, unit)));
     }
 
     #[test]
@@ -107,8 +105,7 @@ mod tests {
         let pat = Sum(LEFT, String::from("Left"), Box::new(irrefutable));
         let square = Term::Lambda(Box::new(Term::App(Box::new(Term::App(Box::new(Term::Atom(Atom::BuiltIn(Op::Mul))), Box::new(Term::Var(0, String::from("y"))))), Box::new(Term::Var(0, String::from("y"))))), String::from("square"));
 
-        let mut expected = HashMap::new();
-        expected.insert(1, square.clone());
+        let expected = Match::Binding(1, square.clone());
         let actual = pat.match_term(&Term::Sum(LEFT, String::from("Left"), Box::new(square.clone())));
         assert_eq!(actual, Some(expected));
 
@@ -125,7 +122,7 @@ mod tests {
         let id = Term::Lambda(Box::new(Term::Var(0, String::from("y"))), String::from("id"));
 
         let matching_term = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(LEFT, String::from("Left"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
-        assert_eq!(pat.match_term(&matching_term), Some(single_sub(1, &id)));
+        assert_eq!(pat.match_term(&matching_term), Some(Match::Binding(1, id.clone())));
 
         let not_quite = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
         assert_eq!(pat.match_term(&not_quite), None);
@@ -138,7 +135,7 @@ mod tests {
         let id = Term::Lambda(Box::new(Term::Var(0, String::from("y"))), String::from("id"));
 
         let matching_term = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(LEFT, String::from("Left"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
-        assert_eq!(pat.match_term(&matching_term), Some(HashMap::new()));
+        assert_eq!(pat.match_term(&matching_term), Some(Match::Plain));
 
         let not_quite = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
         assert_eq!(pat.match_term(&not_quite), None);
@@ -153,7 +150,7 @@ mod tests {
         let answer = Term::Atom(Atom::Int(42));
 
         let matching_term = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(LEFT, String::from("Left"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(answer.clone()))))));
-        assert_eq!(pat.match_term(&matching_term), Some(HashMap::new()));
+        assert_eq!(pat.match_term(&matching_term), Some(Match::Plain));
 
         let wrong_structure = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(LEFT, String::from("Left"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(Term::Atom(Atom::Int(43))))))));
         assert_eq!(pat.match_term(&wrong_structure), None);
