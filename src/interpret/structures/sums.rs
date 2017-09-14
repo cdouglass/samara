@@ -13,12 +13,17 @@ use interpret::structures::Type::*;
 pub struct ConstructorBinding {
     pub tag: String,
     pub term: Term,
-    typ: Type
+    arg_types: Vec<Type>,
+    result_type: Type
 }
 
 impl ConstructorBinding {
     pub fn typ(&self) -> Type {
-        self.typ.clone()
+        let mut t = self.result_type.clone();
+        for a in self.arg_types.iter().rev() {
+            t = arrow(a.clone(), t.clone());
+        }
+        t
     }
 }
 
@@ -57,13 +62,11 @@ impl SumTypeDefs {
 
             if let Unit = t {
                 let term = Term::Sum(n, c.clone(), Box::new(Term::Atom(Atom::Unit)));
-                //TODO don't unwrap
-                let binding = ConstructorBinding{tag: c, term: term, typ: Type::Sum(new_typ.clone())};
+                let binding = ConstructorBinding{tag: c, term: term, arg_types: vec![], result_type: Type::Sum(new_typ.clone())};
                 self.bindings.push(binding);
             } else {
                 let term = Term::Lambda(Box::new(Term::Sum(n, c.clone(), Box::new(Term::Var(0, String::from("x"))))), c.clone());
-                let typ = arrow(t, Type::Sum(new_typ.clone()));
-                let binding = ConstructorBinding{tag: c, term: term, typ: typ};
+                let binding = ConstructorBinding{tag: c, term: term, arg_types: vec![t], result_type: Type::Sum(new_typ.clone())};
                 self.bindings.push(binding);
             }
         }
@@ -82,7 +85,7 @@ impl SumTypeDefs {
 #[derive(Hash)]
 pub struct SumType {
     pub name: String,
-    pub variants: Vec<(String, Type)>,
+    pub variants: Vec<(String, Type)>, // constructor name, argument type
     pub params: Vec<Type>
 }
 
