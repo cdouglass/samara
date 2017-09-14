@@ -22,8 +22,9 @@ pub fn infer_type(term: &Term, bindings: &[LetBinding], mut gen: &mut GenTypeVar
     }
 
     for cb in &sum_types.bindings {
-        let universals = type_vars_free_in(&cb.typ);
-        ctor_bindings.push((cb.typ.clone(), universals));
+        let t = cb.typ();
+        let universals = type_vars_free_in(&t);
+        ctor_bindings.push((t, universals));
     }
 
     let (mut typ, constraints) = get_constraints(term, &mut context, &mut gen, &ctor_bindings)?;

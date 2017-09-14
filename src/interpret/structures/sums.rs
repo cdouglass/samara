@@ -13,7 +13,13 @@ use interpret::structures::Type::*;
 pub struct ConstructorBinding {
     pub tag: String,
     pub term: Term,
-    pub typ: Type
+    typ: Type
+}
+
+impl ConstructorBinding {
+    pub fn typ(&self) -> Type {
+        self.typ.clone()
+    }
 }
 
 #[derive(Debug)]
