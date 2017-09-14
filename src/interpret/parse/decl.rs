@@ -41,7 +41,7 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_t
     Ok(SumType::new(&name, variants, params))
 }
 
-fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<(String, Type), String> {
+fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<(String, Vec<Type>), String> {
     let name = get_sum(tokens, "Missing constructor in right-hand side of type declaration")?;
     let mut token_stack = vec![];
     let typ = parse_type(tokens, &mut token_stack, vars, sum_types)?;
@@ -58,7 +58,11 @@ fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, 
         }
     }
 
-    Ok((String::from(name), typ))
+    let mut arg_types = vec![];
+    if typ != Type::Unit {
+        arg_types.push(typ);
+    }
+    Ok((String::from(name), arg_types))
 }
 
 fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<Type, String> {
@@ -210,7 +214,7 @@ mod tests {
 
     #[test]
     fn test_parses_nullary_sum_type() {
-        let variants = vec![(String::from("JustInt"), Type::Int), (String::from("Nothing"), Type::Unit)];
+        let variants = vec![(String::from("JustInt"), vec![Type::Int]), (String::from("Nothing"), vec![Type::Unit])];
         let maybe_int = SumType::new("MaybeInt", variants.clone(), vec![]);
 
         let mut sum_types = SumTypeDefs::new();
@@ -227,7 +231,7 @@ mod tests {
 
     #[test]
     fn test_parses_nested_type() {
-        let variants = vec![(String::from("Just"), Type::TypeVar(0)), (String::from("Nothing"), Type::Unit)];
+        let variants = vec![(String::from("Just"), vec![Type::TypeVar(0)]), (String::from("Nothing"), vec![Type::Unit])];
         let mut sum_types = SumTypeDefs::new();
         sum_types.add_type("Maybe", variants.clone(), vec![TypeVar(0)]).unwrap();
 

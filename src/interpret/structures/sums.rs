@@ -7,7 +7,6 @@ use interpret::structures::arrow;
 use interpret::structures::Atom;
 use interpret::structures::Term;
 use interpret::structures::Type;
-use interpret::structures::Type::*;
 
 #[derive(Debug)]
 pub struct ConstructorBinding {
@@ -39,7 +38,7 @@ impl SumTypeDefs {
         self.types.get(t).cloned()
     }
 
-    pub fn add_type(&mut self, name: &str, constructors: Vec<(String, Type)>, params: Vec<Type>) -> Result<(), String> {
+    pub fn add_type(&mut self, name: &str, constructors: Vec<(String, Vec<Type>)>, params: Vec<Type>) -> Result<(), String> {
 
         for typ in self.types.values() {
             if typ.name == name {
@@ -56,19 +55,18 @@ impl SumTypeDefs {
         let new_typ = SumType::new(name, constructors.clone(), params.clone());
         self.types.insert(String::from(name), new_typ.clone());
 
-        for (c, t) in constructors {
+        for (c, arg_types) in constructors {
             self.constructors.insert(c.clone(), String::from(name));
             let n = self.bindings.len();
 
-            if let Unit = t {
-                let term = Term::Sum(n, c.clone(), Box::new(Term::Atom(Atom::Unit)));
-                let binding = ConstructorBinding{tag: c, term: term, arg_types: vec![], result_type: Type::Sum(new_typ.clone())};
-                self.bindings.push(binding);
+            // still only uses first argument
+            let term = if arg_types.is_empty() {
+                Term::Sum(n, c.clone(), Box::new(Term::Atom(Atom::Unit)))
             } else {
-                let term = Term::Lambda(Box::new(Term::Sum(n, c.clone(), Box::new(Term::Var(0, String::from("x"))))), c.clone());
-                let binding = ConstructorBinding{tag: c, term: term, arg_types: vec![t], result_type: Type::Sum(new_typ.clone())};
-                self.bindings.push(binding);
-            }
+                Term::Lambda(Box::new(Term::Sum(n, c.clone(), Box::new(Term::Var(0, String::from("x"))))), String::from("x"))
+            };
+            let binding = ConstructorBinding{tag: c, term: term, arg_types: arg_types, result_type: Type::Sum(new_typ.clone())};
+            self.bindings.push(binding);
         }
 
         Ok(())
@@ -85,12 +83,12 @@ impl SumTypeDefs {
 #[derive(Hash)]
 pub struct SumType {
     pub name: String,
-    pub variants: Vec<(String, Type)>, // constructor name, argument type
+    pub variants: Vec<(String, Vec<Type>)>, // constructor name, argument types
     pub params: Vec<Type>
 }
 
 impl SumType {
-    pub fn new(name: &str, constructors: Vec<(String, Type)>, params: Vec<Type>) -> SumType {
+    pub fn new(name: &str, constructors: Vec<(String, Vec<Type>)>, params: Vec<Type>) -> SumType {
         let mut ctor_vec = constructors.clone();
         ctor_vec.sort_by_key(|x| x.0.clone());
         SumType{name: String::from(name), variants: ctor_vec, params: params}
@@ -106,12 +104,13 @@ impl Debug for SumType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use interpret::structures::Type::*;
 
     /* Helpers */
-    fn maybe() -> Vec<(String, Type)> {
+    fn maybe() -> Vec<(String, Vec<Type>)> {
         let mut variants = vec![];
-        variants.push((String::from("Just"), TypeVar(0)));
-        variants.push((String::from("None"), Unit));
+        variants.push((String::from("Just"), vec![TypeVar(0)]));
+        variants.push((String::from("None"), vec![Unit]));
         variants
     }
 
@@ -134,8 +133,8 @@ mod tests {
         let mut defs = SumTypeDefs::new();
         defs.add_type("Maybe", maybe(), vec![]).unwrap();
         let mut dup = vec![];
-        dup.push((String::from("Foo"), Int));
-        dup.push((String::from("None"), Bool));
+        dup.push((String::from("Foo"), vec![Int]));
+        dup.push((String::from("None"), vec![Bool]));
         match defs.add_type("Foo", dup, vec![]) {
             Ok(()) => panic!("Should not allow new sum type that reuses an existing constructor name!"),
             Err(msg) => assert_eq!(&msg, "Ambiguous constructor: None is already defined for type Maybe")

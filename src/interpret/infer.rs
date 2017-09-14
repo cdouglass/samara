@@ -49,8 +49,10 @@ pub fn apply_substitution(substitution: &HashMap<usize, Type>, typ: &mut Type) {
                 apply_substitution(substitution, &mut param);
             }
 
-            for &mut(_, ref mut typ) in &mut sum_type.variants {
-                apply_substitution(substitution, typ);
+            for &mut(_, ref mut arg_types) in &mut sum_type.variants {
+                for ref mut typ in arg_types {
+                    apply_substitution(substitution, typ);
+                }
             }
         },
         _ => { }
@@ -502,13 +504,13 @@ mod tests {
         const NONE: usize = 3;
 
         fn nullary_sum_type(mut sum_types: &mut SumTypeDefs) {
-            let variants = vec![(String::from("Foo"), Unit)];
+            let variants = vec![(String::from("Foo"), vec![])];
             sum_types.add_type("Baz", variants, vec![]).unwrap();
         }
 
         fn either(mut gen: &mut GenTypeVar, mut sum_types: &mut SumTypeDefs) -> (Type, Type) {
             let (t0, t1) = (gen.next().unwrap(), gen.next().unwrap());
-            let variants = vec![(String::from("Left"), t0.clone()), (String::from("Right"), t1.clone())];
+            let variants = vec![(String::from("Left"), vec![t0.clone()]), (String::from("Right"), vec![t1.clone()])];
             sum_types.add_type("Either", variants, vec![t0.clone(), t1.clone()]).unwrap();
             (t0, t1)
         }
@@ -531,7 +533,7 @@ mod tests {
 
         fn maybe(mut gen: &mut GenTypeVar, mut sum_types: &mut SumTypeDefs) -> Type {
             let t = gen.next().unwrap();
-            let variants = vec![(String::from("Just"), t.clone()), (String::from("None"), t.clone())];
+            let variants = vec![(String::from("Just"), vec![t.clone()]), (String::from("None"), vec![t.clone()])];
             sum_types.add_type("Maybe", variants, vec![t.clone()]).unwrap();
             t
         }
@@ -543,7 +545,7 @@ mod tests {
             nullary_sum_type(&mut sum_types);
 
             let term = Term::Constructor(0, String::from("Foo"));
-            let typ = Sum(SumType::new("Baz", vec![(String::from("Foo"), Unit)], vec![]));
+            let typ = Sum(SumType::new("Baz", vec![(String::from("Foo"), vec![])], vec![]));
             assert_type_with_context(&term, &typ, &vec![], &mut gen, &sum_types);
 
             let invalid_1 = Term::App(Box::new(Term::Constructor(0, String::from("Foo"))), Box::new(FIVE));
@@ -558,12 +560,12 @@ mod tests {
             let (t0, t1) = either(&mut gen, &mut sum_types);
 
             let term = apply(left(), FIVE);
-            let left_concrete_variants = vec![(String::from("Left"), Type::Int), (String::from("Right"), t1.clone())];
+            let left_concrete_variants = vec![(String::from("Left"), vec![Type::Int]), (String::from("Right"), vec![t1.clone()])];
             let expected = Sum(SumType::new("Either", left_concrete_variants, vec![Type::Int, t1]));
             assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
 
             let term = apply(right(), FIVE);
-            let right_concrete_variants = vec![(String::from("Left"), t0.clone()), (String::from("Right"), Type::Int)];
+            let right_concrete_variants = vec![(String::from("Left"), vec![t0.clone()]), (String::from("Right"), vec![Type::Int])];
             let expected = Sum(SumType::new("Either", right_concrete_variants, vec![t0.clone(), Type::Int]));
             assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
 
@@ -572,7 +574,7 @@ mod tests {
             let true_case = apply(left(), FIVE);
             let false_case = apply(right(), bool_to_term(true));
             let term = Term::Conditional(Box::new(pred), Box::new(true_case), Box::new(false_case));
-            let concrete_variants = vec![(String::from("Left"), Type::Int), (String::from("Right"), Type::Bool)];
+            let concrete_variants = vec![(String::from("Left"), vec![Type::Int]), (String::from("Right"), vec![Type::Bool])];
             let expected = Sum(SumType::new("Either", concrete_variants, vec![Type::Int, Type::Bool]));
             assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
         }
@@ -584,7 +586,7 @@ mod tests {
             nullary_sum_type(&mut sum_types);
 
             let term = Term::Sum(0, String::from("Foo"), Box::new(Term::Atom(Atom::Unit)));
-            let typ = Sum(SumType::new("Baz", vec![(String::from("Foo"), Unit)], vec![]));
+            let typ = Sum(SumType::new("Baz", vec![(String::from("Foo"), vec![])], vec![]));
             assert_type_with_context(&term, &typ, &vec![], &mut gen, &sum_types);
 
             let invalid_1 = Term::Sum(0, String::from("Foo"), Box::new(FIVE));
@@ -599,12 +601,12 @@ mod tests {
             let (t0, t1) = either(&mut gen, &mut sum_types);
 
             let term = left_sum(&FIVE);
-            let left_concrete_variants = vec![(String::from("Left"), Type::Int), (String::from("Right"), t1.clone())];
+            let left_concrete_variants = vec![(String::from("Left"), vec![Type::Int]), (String::from("Right"), vec![t1.clone()])];
             let expected = Sum(SumType::new("Either", left_concrete_variants, vec![Type::Int, t1]));
             assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
 
             let term = right_sum(&FIVE);
-            let right_concrete_variants = vec![(String::from("Left"), t0.clone()), (String::from("Right"), Type::Int)];
+            let right_concrete_variants = vec![(String::from("Left"), vec![t0.clone()]), (String::from("Right"), vec![Type::Int])];
             let expected = Sum(SumType::new("Either", right_concrete_variants, vec![t0.clone(), Type::Int]));
             assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
 
@@ -613,7 +615,7 @@ mod tests {
             let true_case = left_sum(&FIVE);
             let false_case = right_sum(&bool_to_term(true));
             let term = Term::Conditional(Box::new(pred), Box::new(true_case), Box::new(false_case));
-            let concrete_variants = vec![(String::from("Left"), Type::Int), (String::from("Right"), Type::Bool)];
+            let concrete_variants = vec![(String::from("Left"), vec![Type::Int]), (String::from("Right"), vec![Type::Bool])];
             let expected = Sum(SumType::new("Either", concrete_variants, vec![Type::Int, Type::Bool]));
             assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
         }
