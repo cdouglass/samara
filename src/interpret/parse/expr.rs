@@ -10,7 +10,6 @@ use interpret::SumTypeDefs;
 use interpret::structures::Atom;
 use interpret::structures::Op;
 use interpret::structures::Term;
-use interpret::structures::Type;
 use interpret::structures::patterns::Pattern;
 
 pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
@@ -79,11 +78,7 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             },
             Some(Token::Constructor(s)) => {
                 tokens.next();
-                let mut binding_iter = sum_types.bindings.iter();
-                match binding_iter.position(|x| x.tag == s) {
-                    Some(k) => Ok(Term::Constructor(k, s)),
-                    None => Err(String::from(format!("Unknown constructor {}", s)))
-                }
+                identify_constructor(&s, sum_types).map(|k| Term::Constructor(k, s))
             },
             Some(Token::Identifier(s)) => {
                 tokens.next();
@@ -99,15 +94,13 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
                     }
                 }
             },
-            Some(Token::Number(s)) => {
+            Some(Token::Number(ref s)) => {
                 tokens.next();
-                s.parse::<i64>()
-                    .map_err(|_| String::from(format!("Invalid integer: {}", s)))
-                    .map(|n| Term::Atom(Atom::Int(n)))
+                parse_int(s).map(Term::Atom)
             },
-            Some(Token::Operator(s)) => {
+            Some(Token::Operator(ref s)) => {
                 tokens.next();
-                Op::from_str(&s).map(|op| Term::Atom(Atom::BuiltIn(op)))
+                parse_operator(s).map(Term::Atom)
             },
             None => {
                 if *token_stack == vec![Token::Keyword(In)] || token_stack.is_empty() {
@@ -190,18 +183,8 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
         token_stack.push(Token::Keyword(Semicolon));
         token_stack.push(Token::Keyword(Arrow));
 
-        /*
-         * Push wildcard marker as identifier, then get pattern as term (and when spotting a
-         * variable, check for '_' on top of ID stack and fill it in if so instead of potentially
-         * erroring because it's undefined), then turn term into pattern.
-         *
-         * What will happen if I try to name an actual variable '_'?
-         *
-         * TODO Clean this up later.
-         */
-        identifier_stack.push(String::from("_"));
-        let pattern_term = parse(tokens, token_stack, identifier_stack, sum_types)?;
-        let pattern = term_to_pattern(&pattern_term, sum_types)?;
+        let mut pattern_stack = vec![];
+        let pattern = parse_pattern(tokens, token_stack, &mut pattern_stack, sum_types)?;
 
         // consume -> if above didn't already
         if let Some(&Token::Keyword(Arrow)) = tokens.peek() {
@@ -211,8 +194,11 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
             }
         }
 
-        let arm = parse(tokens, token_stack, identifier_stack, sum_types)?;
-        identifier_stack.pop();
+        identifier_stack.extend(pattern_stack.clone());
+        let arm = parse(tokens, token_stack, &mut identifier_stack, sum_types)?;
+        for _ in pattern_stack {
+            identifier_stack.pop();
+        }
 
         cases.push((pattern, arm));
     }
@@ -220,47 +206,67 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
     Ok(Term::Case(Box::new(arg), cases, Box::new(default)))
 }
 
-fn term_to_pattern(term: &Term, sum_types: &SumTypeDefs) -> Result<Pattern, String> {
-    match *term {
-        Term::Atom(ref atom) => Ok(Pattern::Atom(atom.clone())),
-        Term::Var(ref n, ref s) => {
-            if s == "_" {
+fn parse_pattern(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Pattern, String> {
+    match tokens.next() {
+        Some(Token::Open) => {
+            let pat = parse_pattern(tokens, token_stack, identifier_stack, sum_types)?;
+            consume(Token::Close, tokens)?;
+            Ok(pat)
+        },
+        Some(Token::Unit) => Ok(Pattern::Atom(Atom::Unit)),
+        Some(Token::Number(ref s)) => parse_int(s).map(Pattern::Atom),
+        Some(Token::Operator(ref s)) => parse_operator(s).map(Pattern::Atom),
+        Some(Token::Identifier(s)) => {
+            if &s == "_" {
                 Ok(Pattern::Wildcard)
             } else {
-                Ok(Pattern::Var(*n, s.clone()))
+                identifier_stack.push(s.clone());
+                Ok(Pattern::Var(0, s))
             }
         },
-        Term::Sum(ref n, ref s, ref values) => {
-            match values.last() {
-                Some(val) => {
-                    let inner_pattern = term_to_pattern(val, sum_types)?;
-                    Ok(Pattern::Sum(*n, s.clone(), Box::new(inner_pattern)))
-                },
-                None => {
-                    Ok(Pattern::Sum(*n, s.clone(), Box::new(Pattern::Atom(Atom::Unit))))
-                }
-            }
-        },
-        // TODO clean this up, check whether constructor actually takes argument
-        // needs to look at constructor instead of sum because it doesn't actually parse sums directly now
-        Term::Constructor(ref n, ref s) => {
-            let constructor_binding = &sum_types.bindings[*n];
-            if let Type::Arrow(ref left, _) = constructor_binding.typ() {
-                if *left.clone() != Type::Unit {
-                    return Err(format!("Invalid pattern {:?}", term));
-                }
-            }
-            Ok(Pattern::Sum(*n, s.clone(), Box::new(Pattern::Atom(Atom::Unit))))
-        },
-        Term::App(ref left, ref value) => {
-            if let Term::Constructor(ref n, ref s) = *left.clone() {
-                let inner_pattern = term_to_pattern(value, sum_types)?;
-                Ok(Pattern::Sum(*n, s.clone(), Box::new(inner_pattern)))
+        Some(Token::Constructor(s)) => {
+            let k = identify_constructor(&s, sum_types)?;
+            let pat = if let Some(&Token::Keyword(Arrow)) = tokens.peek() {
+                Pattern::Atom(Atom::Unit)
             } else {
-                Err(format!("Invalid pattern {:?}", term))
+                parse_pattern(tokens, token_stack, identifier_stack, sum_types)?
+            };
+            Ok(Pattern::Sum(k, s, Box::new(pat)))
+        },
+        Some(t) => Err(format!("Unexpected token {:?} in pattern", t)),
+        None => Err(String::from("Unexpected end of input"))
+    }
+}
+
+//TODO use this elsewhere
+fn consume(tok: Token, tokens: &mut Peekable<TokenStream>) -> Result<(), String> {
+    match tokens.next() {
+        Some(t) => {
+            if t == tok {
+                Ok(())
+            } else {
+                Err(format!("Expecting {:?} but instead got {:?}", tok, t))
             }
         },
-        _ => Err(format!("Invalid pattern {:?}", term))
+        None => Err(String::from("Unexpected end of input"))
+    }
+}
+
+fn parse_int(s: &str) -> Result<Atom, String> {
+    s.parse::<i64>()
+        .map_err(|_| String::from(format!("Invalid integer: {}", s)))
+        .map(Atom::Int)
+}
+
+fn parse_operator(s: &str) -> Result<Atom, String> {
+    Op::from_str(&s).map(Atom::BuiltIn)
+}
+
+fn identify_constructor(s: &str, sum_types: &SumTypeDefs) -> Result<usize, String> {
+    let mut binding_iter = sum_types.bindings.iter();
+    match binding_iter.position(|x| &x.tag == s) {
+        Some(k) => Ok(k),
+        None => Err(String::from(format!("Unknown constructor {}", s)))
     }
 }
 

@@ -28,7 +28,7 @@ mod tests;
 pub fn type_of(expr: &str, bindings: &[LetBinding], mut gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> (Result<Term, String>, Result<Type, String>) {
     let ast = parse_from_str(expr, bindings, sum_types);
     match ast {
-        Ok(term) =>{
+        Ok(term) => {
             let typ = infer_type(&term, bindings, &mut gen, sum_types);
             (Ok(term), typ)
         },
