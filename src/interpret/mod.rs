@@ -103,7 +103,7 @@ fn reduce(ast: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -
         },
         // if not defined, would already have blown up in parse
         Var(n, _) => Ok(session_bindings[session_bindings.len() - n - 1].term.clone()),
-        Constructor(n, _) => Ok(sum_types.bindings[n].term.clone()),
+        Constructor(n, _) => Ok(sum_types.bindings[n].term(n).clone()),
         Sum(n, constructor, values) => {
             let mut new_values = vec![];
             for val in values {

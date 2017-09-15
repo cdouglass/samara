@@ -10,7 +10,6 @@ use interpret::structures::Type;
 #[derive(Debug)]
 pub struct ConstructorBinding {
     pub tag: String,
-    pub term: Term,
     arg_types: Vec<Type>,
     result_type: Type
 }
@@ -22,6 +21,20 @@ impl ConstructorBinding {
             t = arrow(a.clone(), t.clone());
         }
         t
+    }
+
+    // silly
+    pub fn term(&self, index: usize) -> Term {
+        let mut values = vec![];
+        let x = String::from("x");
+        for (i, _) in self.arg_types.iter().enumerate().rev() {
+            values.push(Term::Var(i, x.clone()));
+        }
+        let mut term = Term::Sum(index, self.tag.clone(), values);
+        for _ in &self.arg_types {
+            term = Term::Lambda(Box::new(term), x.clone());
+        }
+        term
     }
 }
 
@@ -54,17 +67,9 @@ impl SumTypeDefs {
         let new_typ = SumType::new(name, constructors.clone(), params.clone());
         self.types.insert(String::from(name), new_typ.clone());
 
-        for (c, arg_types) in constructors {
-            self.constructors.insert(c.clone(), String::from(name));
-            let n = self.bindings.len();
-
-            // still only uses first argument
-            let term = if arg_types.is_empty() {
-                Term::Sum(n, c.clone(), vec![])
-            } else {
-                Term::Lambda(Box::new(Term::Sum(n, c.clone(), vec![Term::Var(0, String::from("x"))])), String::from("x"))
-            };
-            let binding = ConstructorBinding{tag: c, term: term, arg_types: arg_types, result_type: Type::Sum(new_typ.clone())};
+        for (tag, arg_types) in constructors {
+            self.constructors.insert(tag.clone(), String::from(name));
+            let binding = ConstructorBinding{tag: tag, arg_types: arg_types, result_type: Type::Sum(new_typ.clone())};
             self.bindings.push(binding);
         }
 
