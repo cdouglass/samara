@@ -116,6 +116,7 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
                 constraints.extend(pat_constraints);
                 constraints.push((arg_type.clone(), pat_type));
 
+
                 for bt in binding_types {
                     context.push((bt.clone(), HashSet::new()));
                 }
@@ -226,7 +227,7 @@ fn unify(mut constraints: Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, Str
     }
 }
 
-//(type of bound var, type of whole pattern, constraints introduced)
+//(types of bound vars, type of whole pattern, constraints introduced)
 fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(Type, HashSet<usize>)], mut gen: &mut GenTypeVar) -> (Vec<Type>, Type, Vec<(Type, Type)>) {
     match *pattern {
         Pattern::Atom(ref atom) => {
@@ -236,14 +237,28 @@ fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(Type, Has
         Pattern::Sum(ref n, _, ref patterns) => {
             let (ref ctor_typ, ref universals) = constructor_bindings[*n];
             let fresh_ctor_typ = instantiate(ctor_typ.clone(), universals, gen);
-            if let Arrow(ref left, ref right) = fresh_ctor_typ {
-                //TODO iterate over patterns
-                let pat = patterns.last().unwrap();
-                let (bound_typ, inner_typ, mut constraints) = get_pattern_constraints(pat, constructor_bindings, gen);
-                constraints.push((*left.clone(), inner_typ));
-                (bound_typ, *right.clone(), constraints)
-            } else {
-                (vec![], fresh_ctor_typ, vec![])
+            let mut bound_types = vec![];
+            let mut constraints = vec![];
+
+            let mut ct = fresh_ctor_typ.clone();
+            let mut it = patterns.iter();
+            // would be neater if constructor_bindings here had arg_types vector
+            loop {
+                match (it.next(), ct) {
+                    (Some(pat), Arrow(left, right)) => {
+                        let (bts, inner_typ, inner_constraints) = get_pattern_constraints(pat, constructor_bindings, gen);
+                        constraints.extend(inner_constraints);
+                        constraints.push((*left, inner_typ));
+                        bound_types.extend(bts);
+                        ct = *right;
+                    },
+                    // TODO error, or make this impossible
+                    (Some(_), _) => { panic!(); },
+                    (None, Arrow(_, _)) => { panic!(); },
+                    (None, ct) => {
+                        return (bound_types, ct, constraints);
+                    }
+                }
             }
         },
         Pattern::Var(_) => {

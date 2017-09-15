@@ -206,7 +206,7 @@ fn test_pair_type() {
     declare_sum_type("Pair a b = Pair a b", &mut gen, &mut sum_types).unwrap();
     evaluate("Pair True 5", &mut bindings, &mut gen, &sum_types).unwrap();
     assert_evaluates_to_atom_with_context("(\\x -> 5) (Pair 0 10)", &mut bindings, &mut gen, &sum_types, Atom::Int(5));
-//    assert_evaluates_to_atom_with_context("case (Pair 0 10) of 5; Pair _ x -> x", &mut bindings, &mut gen, &sum_types, Atom::Int(10));
-//    assert_evaluates_to_atom_with_context("case (Pair 0 10) of 5; Pair x _ -> x", &mut bindings, &mut gen, &sum_types, Atom::Int(0));
+    assert_evaluates_to_atom_with_context("case (Pair 0 10) of 5; Pair _ x -> x", &mut bindings, &mut gen, &sum_types, Atom::Int(10));
+    assert_evaluates_to_atom_with_context("case (Pair 0 10) of 5; Pair x _ -> x", &mut bindings, &mut gen, &sum_types, Atom::Int(0));
 //    assert_evaluates_to_atom_with_context("case (Pair 6 7) of 5; Pair x y -> * x y", &mut bindings, &mut gen, &sum_types, Atom::Int(42));
 }
