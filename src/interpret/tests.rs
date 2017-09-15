@@ -167,7 +167,7 @@ fn test_evaluate_case_expression() {
     let mut gen = GenTypeVar::new();
     let mut sum_types = SumTypeDefs::new();
     declare_sum_type("Maybe a = Just a | None", &mut gen, &mut sum_types).unwrap();
-    assert_evaluates_to_atom_with_context("case Just 10 of 100 ;Just 10 -> 42; Just x -> x; None -> 0", &mut bindings, &mut gen, &sum_types, Atom::Int(42));
+    assert_evaluates_to_atom_with_context("case Just 10 of 100; Just 10 -> 42; Just x -> x; None -> 0", &mut bindings, &mut gen, &sum_types, Atom::Int(42));
     assert_evaluates_to_atom_with_context("case Just 9 of 100; Just 10 -> 42; Just x -> x; None -> 0", &mut bindings, &mut gen, &sum_types, Atom::Int(9));
     assert_evaluates_to_atom_with_context("case None of 100; Just 10 -> 42; Just x -> x; None -> 0", &mut bindings, &mut gen, &sum_types, Atom::Int(0));
     assert_evaluates_to_atom_with_context("case None of 100; Just 10 -> 42; Just x -> x", &mut bindings, &mut gen, &sum_types, Atom::Int(100));
@@ -187,11 +187,22 @@ fn test_binding_in_case_expression() {
         assert_evaluates_to_atom_with_context(e, &mut bindings, &mut gen, &sum_types, Atom::Int(1));
     }
 
-    let exprs = vec!["case x of 0; y -> x", "case 1 of 0; y -> x", "case x of 0; _ -> x", "case x of 0; x -> x"];
+    let exprs = vec!["case x of 0; y -> x","case 1 of 0; y -> x", "case x of 0; _ -> x", "case x of 0; x -> x"];
 
     for e in exprs {
         let typ = type_of(e, &bindings, &mut gen, &sum_types).1.unwrap();
         assert_eq!(typ, Type::Int);
         assert_evaluates_to_atom_with_context(e, &mut bindings, &mut gen, &sum_types, Atom::Int(5));
     }
+}
+
+#[test]
+fn test_pair_type() {
+    let mut bindings = vec![];
+    let mut gen = GenTypeVar::new();
+    let mut sum_types = SumTypeDefs::new();
+    declare_sum_type("Pair a b = Pair a b", &mut gen, &mut sum_types).unwrap();
+    assert_evaluates_to_atom_with_context("case (Pair 0 10) of 5; Pair _ x -> x", &mut bindings, &mut gen, &sum_types, Atom::Int(10));
+    assert_evaluates_to_atom_with_context("case (Pair 0 10) of 5; Pair x _ -> x", &mut bindings, &mut gen, &sum_types, Atom::Int(0));
+    assert_evaluates_to_atom_with_context("case (Pair 6 7) of 5; Pair x y -> * x y", &mut bindings, &mut gen, &sum_types, Atom::Int(42));
 }
