@@ -50,7 +50,7 @@ pub enum Term {
     Conditional(Box<Term>, Box<Term>, Box<Term>), // predicate, true case, false case
     Let(String, Box<Term>, Option<Box<Term>>), // variable name, value, body (only one binding per let, for now)
     Constructor(usize, String),
-    Sum(usize, String, Box<Term>),
+    Sum(usize, String, Vec<Term>),
     Case(Box<Term>, Vec<(Pattern, Term)>, Box<Term>) // argument, arms, and required default - no exhaustiveness check, so cannot rely on match
 }
 
@@ -116,7 +116,10 @@ impl Debug for Term {
                 }
             },
             Term::Constructor(_, ref constructor) => write!(f, "{}", constructor),
-            Term::Sum(_, ref constructor, ref value) => write!(f, "{} {:?}", constructor, value),
+            Term::Sum(_, ref constructor, ref values) => {
+                let value_string = values.iter().fold(String::new(), |acc, next| acc + &format!(" {:?}", next));
+                write!(f, "{}{}", constructor, value_string)
+            }
             Term::Case(_, _, _) => unimplemented!()
         }
     }

@@ -4,7 +4,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 
 use interpret::structures::arrow;
-use interpret::structures::Atom;
 use interpret::structures::Term;
 use interpret::structures::Type;
 
@@ -61,9 +60,9 @@ impl SumTypeDefs {
 
             // still only uses first argument
             let term = if arg_types.is_empty() {
-                Term::Sum(n, c.clone(), Box::new(Term::Atom(Atom::Unit)))
+                Term::Sum(n, c.clone(), vec![])
             } else {
-                Term::Lambda(Box::new(Term::Sum(n, c.clone(), Box::new(Term::Var(0, String::from("x"))))), String::from("x"))
+                Term::Lambda(Box::new(Term::Sum(n, c.clone(), vec![Term::Var(0, String::from("x"))])), String::from("x"))
             };
             let binding = ConstructorBinding{tag: c, term: term, arg_types: arg_types, result_type: Type::Sum(new_typ.clone())};
             self.bindings.push(binding);

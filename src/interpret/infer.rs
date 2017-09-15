@@ -50,8 +50,8 @@ pub fn apply_substitution(substitution: &HashMap<usize, Type>, typ: &mut Type) {
             }
 
             for &mut(_, ref mut arg_types) in &mut sum_type.variants {
-                for ref mut typ in arg_types {
-                    apply_substitution(substitution, typ);
+                for mut typ in arg_types {
+                    apply_substitution(substitution, &mut typ);
                 }
             }
         },
@@ -150,16 +150,25 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
             let fresh_typ = instantiate(typ.clone(), universals, gen);
             Ok((fresh_typ, vec![]))
         },
-        Term::Sum(ref n, _, ref value) => {
+        Term::Sum(ref n, _, ref values) => {
             let (ref ctor_typ, ref universals) = constructor_bindings[*n];
             let fresh_ctor_typ = instantiate(ctor_typ.clone(), universals, gen);
-            let (value_type, mut constraints) = get_constraints(value, &mut context, gen, constructor_bindings)?;
-            if let Arrow(ref left, ref right) = fresh_ctor_typ {
-                constraints.push((value_type, *left.clone()));
-                Ok((*right.clone(), constraints))
-            } else {
-                constraints.push((value_type, Unit));
-                Ok((fresh_ctor_typ, constraints))
+
+            // values should be nonempty iff constructor has an arrow type
+            match values.last() {
+                Some(value) => {
+                    let (value_type, mut constraints) = get_constraints(value, &mut context, gen, constructor_bindings)?;
+                    if let Arrow(ref left, ref right) = fresh_ctor_typ {
+                        constraints.push((value_type, *left.clone()));
+                        Ok((*right.clone(), constraints))
+                    } else {
+                        constraints.push((value_type, Type::Unit));
+                        Ok((fresh_ctor_typ, constraints))
+                    }
+                },
+                None => {
+                    Ok((fresh_ctor_typ, vec![]))
+                }
             }
         }
     }
@@ -520,7 +529,7 @@ mod tests {
         }
 
         fn left_sum(term: &Term) -> Term {
-            Term::Sum(LEFT, String::from("Left"), Box::new(term.clone()))
+            Term::Sum(LEFT, String::from("Left"), vec![term.clone()])
         }
 
         fn right() -> Term {
@@ -528,7 +537,7 @@ mod tests {
         }
 
         fn right_sum(term: &Term) -> Term {
-            Term::Sum(RIGHT, String::from("Right"), Box::new(term.clone()))
+            Term::Sum(RIGHT, String::from("Right"), vec![term.clone()])
         }
 
         fn maybe(mut gen: &mut GenTypeVar, mut sum_types: &mut SumTypeDefs) -> Type {
@@ -585,11 +594,11 @@ mod tests {
             let mut sum_types = SumTypeDefs::new();
             nullary_sum_type(&mut sum_types);
 
-            let term = Term::Sum(0, String::from("Foo"), Box::new(Term::Atom(Atom::Unit)));
+            let term = Term::Sum(0, String::from("Foo"), vec![]);
             let typ = Sum(SumType::new("Baz", vec![(String::from("Foo"), vec![])], vec![]));
             assert_type_with_context(&term, &typ, &vec![], &mut gen, &sum_types);
 
-            let invalid_1 = Term::Sum(0, String::from("Foo"), Box::new(FIVE));
+            let invalid_1 = Term::Sum(0, String::from("Foo"), vec![FIVE]);
             let expected = "Type error: Int != ()";
             assert_type_err_with_context(&invalid_1, &expected, &vec![], &mut gen, &sum_types);
         }
@@ -682,7 +691,7 @@ mod tests {
             let pat2 = Pattern::Sum(RIGHT, String::from("Right"), Box::new(Pattern::Var(0, String::from("x"))));
             let cases = vec![(pat0, x.clone()), (pat1, FIVE), (pat2, x)];
 
-            let term = Term::Case(Box::new(left_sum(&Term::Sum(JUST, String::from("Just"), Box::new(FIVE)))), cases, Box::new(FIVE));
+            let term = Term::Case(Box::new(left_sum(&Term::Sum(JUST, String::from("Just"), vec![FIVE]))), cases, Box::new(FIVE));
             assert_type_with_context(&term, &Type::Int, &vec![], &mut gen, &sum_types);
         }
 

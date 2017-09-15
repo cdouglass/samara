@@ -184,7 +184,7 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
     loop {
         if let Some(&Token::Keyword(Semicolon)) = token_stack.last() {
             break;
-        } else if let None = tokens.peek() {
+        } else if tokens.peek().is_none() {
             break;
         }
         token_stack.push(Token::Keyword(Semicolon));
@@ -204,14 +204,11 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
         let pattern = term_to_pattern(&pattern_term, sum_types)?;
 
         // consume -> if above didn't already
-        match tokens.peek().cloned() {
-            Some(Token::Keyword(Arrow)) => {
-                if token_stack.last() == Some(&Token::Keyword(Arrow)) {
-                    token_stack.pop();
-                    tokens.next();
-                }
-            },
-            _ => { }
+        if let Some(&Token::Keyword(Arrow)) = tokens.peek() {
+            if token_stack.last() == Some(&Token::Keyword(Arrow)) {
+                token_stack.pop();
+                tokens.next();
+            }
         }
 
         let arm = parse(tokens, token_stack, identifier_stack, sum_types)?;
@@ -233,9 +230,16 @@ fn term_to_pattern(term: &Term, sum_types: &SumTypeDefs) -> Result<Pattern, Stri
                 Ok(Pattern::Var(*n, s.clone()))
             }
         },
-        Term::Sum(ref n, ref s, ref value) => {
-            let inner_pattern = term_to_pattern(value, sum_types)?;
-            Ok(Pattern::Sum(*n, s.clone(), Box::new(inner_pattern)))
+        Term::Sum(ref n, ref s, ref values) => {
+            match values.last() {
+                Some(val) => {
+                    let inner_pattern = term_to_pattern(val, sum_types)?;
+                    Ok(Pattern::Sum(*n, s.clone(), Box::new(inner_pattern)))
+                },
+                None => {
+                    Ok(Pattern::Sum(*n, s.clone(), Box::new(Pattern::Atom(Atom::Unit))))
+                }
+            }
         },
         // TODO clean this up, check whether constructor actually takes argument
         // needs to look at constructor instead of sum because it doesn't actually parse sums directly now

@@ -104,12 +104,16 @@ fn reduce(ast: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -
         // if not defined, would already have blown up in parse
         Var(n, _) => Ok(session_bindings[session_bindings.len() - n - 1].term.clone()),
         Constructor(n, _) => Ok(sum_types.bindings[n].term.clone()),
-        Sum(n, constructor, value) => {
-            let value_ = reduce(*value, session_bindings, sum_types)?;
-            Ok(Sum(n, constructor, Box::new(value_)))
+        Sum(n, constructor, values) => {
+            let mut new_values = vec![];
+            for val in values {
+                let new_val = reduce(val, session_bindings, sum_types)?;
+                new_values.push(new_val);
+            }
+            Ok(Sum(n, constructor, new_values))
         }
         Case(arg, cases, default) => {
-            for &(ref pattern, ref arm) in cases.iter() {
+            for &(ref pattern, ref arm) in &cases {
                 match pattern.match_term(&reduce(*arg.clone(), session_bindings, sum_types)?) {
                     Some(Match::Binding(n, value)) => {
                         let subbed_arm = sub_at_index(arm.clone(), &value, n);
@@ -168,16 +172,16 @@ fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
     match body {
         Atom(a) => Atom(a),
         Constructor(n, constructor) => Constructor(n, constructor),
-        Sum(n, constructor, value) => {
-            let subbed_value = sub_at_index(*value, t, index);
-            Sum(n, constructor, Box::new(subbed_value))
+        Sum(n, constructor, values) => {
+            let subbed_values = values.iter().map(|val| sub_at_index(val.clone(), t, index)).collect();
+            Sum(n, constructor, subbed_values)
         },
         Case(arg, cases, default) => {
             let new_arg = sub_at_index(*arg, t, index);
             let new_default = sub_at_index(*default, t, index);
 
             let mut new_cases = vec![];
-            for &(ref pattern, ref arm) in cases.iter() {
+            for &(ref pattern, ref arm) in &cases {
                 let new_arm = sub_at_index(arm.clone(), t, index + 1);
                 new_cases.push((pattern.clone(), new_arm));
             }
@@ -256,15 +260,15 @@ fn unshift_indices(term: Term, cutoff: usize) -> Term {
     match term {
         Atom(a) => Atom(a),
         Constructor(n, constructor) => Constructor(n, constructor),
-        Sum(n, constructor, value) => {
-            let value_ = unshift_indices(*value, cutoff);
-            Sum(n, constructor, Box::new(value_))
+        Sum(n, constructor, values) => {
+            let new_values = values.iter().map(|val| unshift_indices(val.clone(), cutoff)).collect();
+            Sum(n, constructor, new_values)
         },
         Case(arg, cases, default) => {
             let new_arg = unshift_indices(*arg, cutoff);
             let new_default = unshift_indices(*default, cutoff);
             let mut new_cases = vec![];
-            for &(ref pattern, ref arm) in cases.iter() {
+            for &(ref pattern, ref arm) in &cases {
                 let new_arm = unshift_indices(arm.clone(), cutoff + 1);
                 new_cases.push((pattern.clone(), new_arm));
             }

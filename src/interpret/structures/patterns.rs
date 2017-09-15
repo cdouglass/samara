@@ -23,9 +23,14 @@ impl Pattern {
     pub fn match_term(&self, term: &Term) -> Option<Match> {
         match (self, term) {
             (&Pattern::Wildcard, _) => Some(Match::Plain),
-            (&Pattern::Sum(ref n, _, ref pat), &Term::Sum(ref m, _, ref val)) => {
+            (&Pattern::Sum(ref n, _, ref pat), &Term::Sum(ref m, _, ref values)) => {
                 if m == n {
-                    pat.match_term(val)
+                    // assuming for now there will either be 1 or 0
+                    // so it doesn't matter which end we look at
+                    match values.last() {
+                        Some(val) => pat.match_term(val),
+                        None => pat.match_term(&Term::Atom(Atom::Unit))
+                    }
                 } else { None }
             },
             (&Pattern::Atom(ref a), &Term::Atom(ref b)) => {
@@ -90,7 +95,7 @@ mod tests {
         let irrefutable = Var(1, String::from("x"));
         let five = Term::Atom(Atom::Int(5));
         let square = Term::Lambda(Box::new(Term::App(Box::new(Term::App(Box::new(Term::Atom(Atom::BuiltIn(Op::Mul))), Box::new(Term::Var(0, String::from("y"))))), Box::new(Term::Var(0, String::from("y"))))), String::from("square"));
-        let none = Term::Sum(NONE, String::from("None"), Box::new(Term::Atom(Atom::Unit)));
+        let none = Term::Sum(NONE, String::from("None"), vec![]);
         let unit = Term::Atom(Atom::Unit);
 
         assert_eq!(irrefutable.match_term(&five), Some(Match::Binding(1, five)));
@@ -106,10 +111,10 @@ mod tests {
         let square = Term::Lambda(Box::new(Term::App(Box::new(Term::App(Box::new(Term::Atom(Atom::BuiltIn(Op::Mul))), Box::new(Term::Var(0, String::from("y"))))), Box::new(Term::Var(0, String::from("y"))))), String::from("square"));
 
         let expected = Match::Binding(1, square.clone());
-        let actual = pat.match_term(&Term::Sum(LEFT, String::from("Left"), Box::new(square.clone())));
+        let actual = pat.match_term(&Term::Sum(LEFT, String::from("Left"), vec![square.clone()]));
         assert_eq!(actual, Some(expected));
 
-        assert_eq!(pat.match_term(&Term::Sum(RIGHT, String::from("Right"), Box::new(square.clone()))), None);
+        assert_eq!(pat.match_term(&Term::Sum(RIGHT, String::from("Right"), vec![square.clone()])), None);
         assert_eq!(pat.match_term(&Term::Constructor(RIGHT, String::from("Right"))), None);
         assert_eq!(pat.match_term(&Term::Atom(Atom::Int(5))), None);
     }
@@ -121,10 +126,10 @@ mod tests {
         let pat = Sum(JUST, String::from("Just"), Box::new(Sum(LEFT, String::from("Left"), Box::new(Sum(RIGHT, String::from("Right"), Box::new(irrefutable))))));
         let id = Term::Lambda(Box::new(Term::Var(0, String::from("y"))), String::from("id"));
 
-        let matching_term = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(LEFT, String::from("Left"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
+        let matching_term = Term::Sum(JUST, String::from("Just"), vec![Term::Sum(LEFT, String::from("Left"), vec![Term::Sum(RIGHT, String::from("Right"), vec![id.clone()])])]);
         assert_eq!(pat.match_term(&matching_term), Some(Match::Binding(1, id.clone())));
 
-        let not_quite = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
+        let not_quite = Term::Sum(JUST, String::from("Just"), vec![Term::Sum(RIGHT, String::from("Right"), vec![Term::Sum(RIGHT, String::from("Right"), vec![id.clone()])])]);
         assert_eq!(pat.match_term(&not_quite), None);
     }
 
@@ -134,10 +139,10 @@ mod tests {
         let pat = Sum(JUST, String::from("Just"), Box::new(Sum(LEFT, String::from("Left"), Box::new(Sum(RIGHT, String::from("Right"), Box::new(Wildcard))))));
         let id = Term::Lambda(Box::new(Term::Var(0, String::from("y"))), String::from("id"));
 
-        let matching_term = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(LEFT, String::from("Left"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
+        let matching_term = Term::Sum(JUST, String::from("Just"), vec![Term::Sum(LEFT, String::from("Left"), vec![Term::Sum(RIGHT, String::from("Right"), vec![id.clone()])])]);
         assert_eq!(pat.match_term(&matching_term), Some(Match::Plain));
 
-        let not_quite = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(id.clone()))))));
+        let not_quite = Term::Sum(JUST, String::from("Just"), vec![Term::Sum(RIGHT, String::from("Right"), vec![Term::Sum(RIGHT, String::from("Right"), vec![id.clone()])])]);
         assert_eq!(pat.match_term(&not_quite), None);
     }
 
@@ -149,13 +154,13 @@ mod tests {
         let pat = Sum(JUST, String::from("Just"), Box::new(Sum(LEFT, String::from("Left"), Box::new(Sum(RIGHT, String::from("Right"), Box::new(atom))))));
         let answer = Term::Atom(Atom::Int(42));
 
-        let matching_term = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(LEFT, String::from("Left"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(answer.clone()))))));
+        let matching_term = Term::Sum(JUST, String::from("Just"), vec![Term::Sum(LEFT, String::from("Left"), vec![Term::Sum(RIGHT, String::from("Right"), vec![answer.clone()])])]);
         assert_eq!(pat.match_term(&matching_term), Some(Match::Plain));
 
-        let wrong_structure = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(LEFT, String::from("Left"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(Term::Atom(Atom::Int(43))))))));
+        let wrong_structure = Term::Sum(JUST, String::from("Just"), vec![Term::Sum(LEFT, String::from("Left"), vec![Term::Sum(RIGHT, String::from("Right"), vec![Term::Atom(Atom::Int(43))])])]);
         assert_eq!(pat.match_term(&wrong_structure), None);
 
-        let wrong_structure = Term::Sum(JUST, String::from("Just"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(Term::Sum(RIGHT, String::from("Right"), Box::new(answer.clone()))))));
+        let wrong_structure = Term::Sum(JUST, String::from("Just"), vec![Term::Sum(RIGHT, String::from("Right"), vec![Term::Sum(RIGHT, String::from("Right"), vec![answer.clone()])])]);
         assert_eq!(pat.match_term(&wrong_structure), None);
     }
 }
