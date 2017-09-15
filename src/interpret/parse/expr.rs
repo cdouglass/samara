@@ -23,7 +23,7 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
         let next_term_result = match tokens.peek().cloned() {
             Some(Token::Unit) => {
                 tokens.next();
-                return Ok(Term::Atom(Atom::Unit));
+                Ok(Term::Atom(Atom::Unit))
             },
             Some(Token::Open) => {
                 tokens.next();
@@ -335,6 +335,11 @@ mod tests {
     #[test]
     fn test_parses_unit() {
         assert_parse("()", Term::Atom(Atom::Unit));
+    }
+
+    #[test]
+    fn test_unit_as_argument() {
+        assert_parse("(\\x -> 5) ()", Term::App(Box::new(Term::Lambda(Box::new(Term::Atom(Atom::Int(5))), String::from("x"))), Box::new(Term::Atom(Atom::Unit))));
     }
 
     #[test]
