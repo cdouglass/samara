@@ -6,7 +6,7 @@ use interpret::structures::Term;
 #[derive(PartialEq)]
 pub enum Pattern {
     Wildcard,
-    Sum(usize, String, Box<Pattern>),
+    Sum(usize, String, Vec<Pattern>),
     Atom(Atom),
     Var(String)
 }
@@ -23,13 +23,14 @@ impl Pattern {
     pub fn match_term(&self, term: &Term) -> Option<Match> {
         match (self, term) {
             (&Pattern::Wildcard, _) => Some(Match::Plain),
-            (&Pattern::Sum(ref n, _, ref pat), &Term::Sum(ref m, _, ref values)) => {
+            (&Pattern::Sum(ref n, _, ref patterns), &Term::Sum(ref m, _, ref values)) => {
                 if m == n {
                     // assuming for now there will either be 1 or 0
                     // so it doesn't matter which end we look at
-                    match values.last() {
-                        Some(val) => pat.match_term(val),
-                        None => pat.match_term(&Term::Atom(Atom::Unit))
+                    let pairs = patterns.iter().zip(values.iter());
+                    match pairs.last() {
+                        Some((pat, val)) => pat.match_term(val),
+                        None => Some(Match::Plain)
                     }
                 } else { None }
             },
@@ -48,7 +49,11 @@ impl Pattern {
     pub fn identifiers(&self) -> Vec<&String> {
         match *self {
             Pattern::Var(ref s) => vec![s],
-            Pattern::Sum(_, _, ref pat) => pat.identifiers(),
+            Pattern::Sum(_, _, ref patterns) => {
+                patterns.iter().fold(vec![], (|mut v, pat| {
+                    v.extend(pat.identifiers());
+                    v}))
+            }
             _ => vec![]
         }
     }
@@ -115,7 +120,7 @@ mod tests {
     #[test]
     fn test_sum_pattern() {
         let irrefutable = Var(String::from("x"));
-        let pat = Sum(LEFT, String::from("Left"), Box::new(irrefutable));
+        let pat = Sum(LEFT, String::from("Left"), vec![irrefutable]);
         let square = Term::Lambda(Box::new(Term::App(Box::new(Term::App(Box::new(Term::Atom(Atom::BuiltIn(Op::Mul))), Box::new(Term::Var(0, String::from("y"))))), Box::new(Term::Var(0, String::from("y"))))), String::from("square"));
 
         let expected = Match::Binding(square.clone());
@@ -131,7 +136,7 @@ mod tests {
     fn test_nested_irrefutable_pattern() {
         let irrefutable = Var(String::from("x"));
         // Just(Left(Right(x)))
-        let pat = Sum(JUST, String::from("Just"), Box::new(Sum(LEFT, String::from("Left"), Box::new(Sum(RIGHT, String::from("Right"), Box::new(irrefutable))))));
+        let pat = Sum(JUST, String::from("Just"), vec![Sum(LEFT, String::from("Left"), vec![Sum(RIGHT, String::from("Right"), vec![irrefutable])])]);
         let id = Term::Lambda(Box::new(Term::Var(0, String::from("y"))), String::from("id"));
 
         let matching_term = Term::Sum(JUST, String::from("Just"), vec![Term::Sum(LEFT, String::from("Left"), vec![Term::Sum(RIGHT, String::from("Right"), vec![id.clone()])])]);
@@ -144,7 +149,7 @@ mod tests {
     #[test]
     fn test_nested_wildcard_pattern() {
         // Just(Left(Right(_)))
-        let pat = Sum(JUST, String::from("Just"), Box::new(Sum(LEFT, String::from("Left"), Box::new(Sum(RIGHT, String::from("Right"), Box::new(Wildcard))))));
+        let pat = Sum(JUST, String::from("Just"), vec![Sum(LEFT, String::from("Left"), vec![Sum(RIGHT, String::from("Right"), vec![Wildcard])])]);
         let id = Term::Lambda(Box::new(Term::Var(0, String::from("y"))), String::from("id"));
 
         let matching_term = Term::Sum(JUST, String::from("Just"), vec![Term::Sum(LEFT, String::from("Left"), vec![Term::Sum(RIGHT, String::from("Right"), vec![id.clone()])])]);
@@ -159,7 +164,7 @@ mod tests {
     fn test_nested_atom_pattern() {
         let atom = Atom(Atom::Int(42));
         // Just(Left(Right(42)))
-        let pat = Sum(JUST, String::from("Just"), Box::new(Sum(LEFT, String::from("Left"), Box::new(Sum(RIGHT, String::from("Right"), Box::new(atom))))));
+        let pat = Sum(JUST, String::from("Just"), vec![Sum(LEFT, String::from("Left"), vec![Sum(RIGHT, String::from("Right"), vec![atom])])]);
         let answer = Term::Atom(Atom::Int(42));
 
         let matching_term = Term::Sum(JUST, String::from("Just"), vec![Term::Sum(LEFT, String::from("Left"), vec![Term::Sum(RIGHT, String::from("Right"), vec![answer.clone()])])]);

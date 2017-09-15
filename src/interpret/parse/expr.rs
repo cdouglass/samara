@@ -192,6 +192,7 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
             None => false
         };
 
+        //TODO
         consume(Token::Keyword(Arrow), tokens)?;
         token_stack.pop();
 
@@ -230,7 +231,7 @@ fn parse_pattern(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<T
             } else {
                 parse_pattern(tokens, token_stack, sum_types)?
             };
-            Ok(Pattern::Sum(k, s, Box::new(pat)))
+            Ok(Pattern::Sum(k, s, vec![pat]))
         },
         Some(t) => Err(format!("Unexpected token {:?} in pattern", t)),
         None => Err(String::from("Unexpected end of input"))
@@ -385,11 +386,16 @@ mod tests {
             _ => panic!()
         };
         let ast = parse(&mut tokens, &mut vec![], &mut vec![], &sum_types).unwrap();
+        let expected_cases = vec![
+            (Pattern::Sum(0, String::from("Just"), vec![Pattern::Atom(Atom::Int(0))]), Term::Atom(Atom::Int(42))),
+            (Pattern::Sum(0, String::from("Just"), vec![Pattern::Var(String::from("x"))]), Term::Var(0, String::from("x"))),
+            (Pattern::Sum(1, String::from("None"), vec![Pattern::Atom(Atom::Unit)]), Term::Atom(Atom::Int(100))),
+            (Pattern::Wildcard, Term::Atom(Atom::Int(777)))];
         match ast {
             Term::Case(arg, cases, default) => {
                 assert_eq!(*arg, Term::App(Box::new(Term::Constructor(0, String::from("Just"))), Box::new(Term::Atom(Atom::Int(10)))));
                 assert_eq!(*default, Term::Atom(Atom::Int(5)));
-                assert_eq!(cases, vec![(Pattern::Sum(0, String::from("Just"), Box::new(Pattern::Atom(Atom::Int(0)))), Term::Atom(Atom::Int(42))), (Pattern::Sum(0, String::from("Just"), Box::new(Pattern::Var(String::from("x")))), Term::Var(0, String::from("x"))), (Pattern::Sum(1, String::from("None"), Box::new(Pattern::Atom(Atom::Unit))), Term::Atom(Atom::Int(100))), (Pattern::Wildcard, Term::Atom(Atom::Int(777)))]);
+                assert_eq!(cases, expected_cases);
             },
             x => panic!("Expected case expression but got {:?}", x)
         }
