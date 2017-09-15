@@ -210,8 +210,8 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
 fn parse_pattern(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, sum_types: &SumTypeDefs) -> Result<Pattern, String> {
     match tokens.next() {
         Some(Token::Open) => {
+            token_stack.push(Token::Open);
             let pat = parse_pattern(tokens, token_stack, sum_types)?;
-            consume(Token::Close, tokens)?;
             Ok(pat)
         },
         Some(Token::Unit) => Ok(Pattern::Atom(Atom::Unit)),
@@ -226,12 +226,24 @@ fn parse_pattern(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<T
         },
         Some(Token::Constructor(s)) => {
             let k = identify_constructor(&s, sum_types)?;
-            let pat = if let Some(&Token::Keyword(Arrow)) = tokens.peek() {
-                Pattern::Atom(Atom::Unit)
-            } else {
-                parse_pattern(tokens, token_stack, sum_types)?
-            };
-            Ok(Pattern::Sum(k, s, vec![pat]))
+            let mut patterns = vec![];
+            loop {
+                match tokens.peek() {
+                    Some(&Token::Keyword(Arrow)) => { break; },
+                    Some(&Token::Close) => {
+                        if token_stack.pop() == Some(Token::Open) {
+                            tokens.next();
+                            break;
+                        } else {
+                            return Err(format!("Unexpected token {:?} in pattern", Token::Close));
+                        }
+                    },
+                    _ => { }
+                }
+                let pat = parse_pattern(tokens, token_stack, sum_types)?;
+                patterns.push(pat);
+            }
+            Ok(Pattern::Sum(k, s, patterns))
         },
         Some(t) => Err(format!("Unexpected token {:?} in pattern", t)),
         None => Err(String::from("Unexpected end of input"))
@@ -389,7 +401,7 @@ mod tests {
         let expected_cases = vec![
             (Pattern::Sum(0, String::from("Just"), vec![Pattern::Atom(Atom::Int(0))]), Term::Atom(Atom::Int(42))),
             (Pattern::Sum(0, String::from("Just"), vec![Pattern::Var(String::from("x"))]), Term::Var(0, String::from("x"))),
-            (Pattern::Sum(1, String::from("None"), vec![Pattern::Atom(Atom::Unit)]), Term::Atom(Atom::Int(100))),
+            (Pattern::Sum(1, String::from("None"), vec![]), Term::Atom(Atom::Int(100))),
             (Pattern::Wildcard, Term::Atom(Atom::Int(777)))];
         match ast {
             Term::Case(arg, cases, default) => {
