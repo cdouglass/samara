@@ -10,7 +10,6 @@ use self::structures::Op::*;
 use self::structures::Term;
 use self::structures::Term::*;
 use self::structures::Type;
-pub use self::structures::patterns::Match;
 pub use self::structures::sums::SumType;
 pub use self::structures::sums::SumTypeDefs;
 
@@ -115,12 +114,16 @@ fn reduce(ast: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -
         Case(arg, cases, default) => {
             for &(ref pattern, ref arm) in &cases {
                 match pattern.match_term(&reduce(*arg.clone(), session_bindings, sum_types)?) {
-                    Some(Match::Binding(value)) => {
-                        let subbed_arm = sub_at_index(arm.clone(), &value, 0);
-                        return reduce(unshift_indices(subbed_arm, 1), session_bindings, sum_types);
-                    },
-                    Some(Match::Plain) => {
-                        return reduce(arm.clone(), session_bindings, sum_types);
+                    Some(values) => {
+                        //TODO iterate for val in values
+                        //each will have different index to substitute at
+                        //so how do I handle unshift_indices?
+                        if values.is_empty() {
+                            return reduce(arm.clone(), session_bindings, sum_types);
+                        } else {
+                            let subbed_arm = sub_at_index(arm.clone(), &values[0], 0);
+                            return reduce(unshift_indices(subbed_arm, 1), session_bindings, sum_types);
+                        }
                     },
                     None => { }
                 }
