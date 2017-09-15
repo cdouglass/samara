@@ -116,7 +116,10 @@ fn get_constraints(term: &Term, mut context: &mut Vec<(Type, HashSet<usize>)>, m
                 constraints.extend(pat_constraints);
                 constraints.push((arg_type.clone(), pat_type));
 
-                context.push((binding_type.clone(), HashSet::new()));
+                if let Some(ref typ) = binding_type {
+                    context.push((typ.clone(), HashSet::new()));
+                }
+
                 let (arm_type, arm_constraints) = get_constraints(arm, &mut context, gen, constructor_bindings)?;
                 constraints.extend(arm_constraints);
                 constraints.push((arm_type, default_type.clone()));
@@ -224,11 +227,11 @@ fn unify(mut constraints: Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, Str
 }
 
 //(type of bound var, type of whole pattern, constraints introduced)
-fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(Type, HashSet<usize>)], mut gen: &mut GenTypeVar) -> (Type, Type, Vec<(Type, Type)>) {
+fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(Type, HashSet<usize>)], mut gen: &mut GenTypeVar) -> (Option<Type>, Type, Vec<(Type, Type)>) {
     match *pattern {
         Pattern::Atom(ref atom) => {
             let typ = base_type(atom);
-            (Type::Unit, typ, vec![])
+            (None, typ, vec![])
         },
         Pattern::Sum(ref n, _, ref pat) => {
             let (ref ctor_typ, ref universals) = constructor_bindings[*n];
@@ -238,19 +241,16 @@ fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(Type, Has
                 constraints.push((*left.clone(), inner_typ));
                 (bound_typ, *right.clone(), constraints)
             } else {
-                // TODO nullary constructor should have a separate term/pattern variant
-                // as is, it is possible to construct wrong patterns like None(5)
-                // and this will ignore them
-                (Type::Unit, fresh_ctor_typ, vec![])
+                (None, fresh_ctor_typ, vec![])
             }
         },
-        Pattern::Var(_, _) => {
+        Pattern::Var(_) => {
             let typ = gen.next().unwrap();
-            (typ.clone(), typ, vec![])
+            (Some(typ.clone()), typ, vec![])
         },
         Pattern::Wildcard => {
             let typ = gen.next().unwrap();
-            (Type::Unit, typ, vec![])
+            (None, typ, vec![])
         }
     }
 }
@@ -643,7 +643,7 @@ mod tests {
 
             let pat0 = Pattern::Sum(LEFT, String::from("Left"), Box::new(Pattern::Wildcard));
             let pat1 = Pattern::Sum(RIGHT, String::from("Right"), Box::new(Pattern::Wildcard));
-            let pat2 = Pattern::Var(0, String::from("x"));
+            let pat2 = Pattern::Var(String::from("x"));
             let pat3 = Pattern::Wildcard;
             let cases = vec![(pat0, int_to_term(0)), (pat1, int_to_term(1)), (pat2, int_to_term(2)), (pat3, int_to_term(3))];
 
@@ -658,7 +658,7 @@ mod tests {
             let mut sum_types = SumTypeDefs::new();
             let (_, _) = either(&mut gen, &mut sum_types);
 
-            let pat0 = Pattern::Sum(LEFT, String::from("Left"), Box::new(Pattern::Var(0, String::from("x"))));
+            let pat0 = Pattern::Sum(LEFT, String::from("Left"), Box::new(Pattern::Var(String::from("x"))));
             let pat1 = Pattern::Sum(RIGHT, String::from("Right"), Box::new(Pattern::Wildcard));
             let id = Term::Lambda(Box::new(Term::Var(0, String::from("x"))), String::from("x"));
             let cases = vec![(pat0.clone(), apply(id, Term::Var(0, String::from("x")))), (pat1.clone(), FIVE)];
@@ -686,9 +686,9 @@ mod tests {
 
             let x = Term::Var(0, String::from("x"));
 
-            let pat0 = Pattern::Sum(LEFT, String::from("Left"), Box::new(Pattern::Sum(JUST, String::from("Just"), Box::new(Pattern::Var(0, String::from("x"))))));
+            let pat0 = Pattern::Sum(LEFT, String::from("Left"), Box::new(Pattern::Sum(JUST, String::from("Just"), Box::new(Pattern::Var(String::from("x"))))));
             let pat1 = Pattern::Sum(LEFT, String::from("Left"), Box::new(Pattern::Sum(NONE, String::from("None"), Box::new(Pattern::Wildcard))));
-            let pat2 = Pattern::Sum(RIGHT, String::from("Right"), Box::new(Pattern::Var(0, String::from("x"))));
+            let pat2 = Pattern::Sum(RIGHT, String::from("Right"), Box::new(Pattern::Var(String::from("x"))));
             let cases = vec![(pat0, x.clone()), (pat1, FIVE), (pat2, x)];
 
             let term = Term::Case(Box::new(left_sum(&Term::Sum(JUST, String::from("Just"), vec![FIVE]))), cases, Box::new(FIVE));

@@ -183,20 +183,20 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
         token_stack.push(Token::Keyword(Semicolon));
         token_stack.push(Token::Keyword(Arrow));
 
-        let mut pattern_stack = vec![];
-        let pattern = parse_pattern(tokens, token_stack, &mut pattern_stack, sum_types)?;
+        let pattern = parse_pattern(tokens, token_stack, sum_types)?;
+        let binds_name = match pattern.identifiers().last().cloned() {
+            Some(s) => {
+                identifier_stack.push(s.clone());
+                true
+            },
+            None => false
+        };
 
-        // consume -> if above didn't already
-        if let Some(&Token::Keyword(Arrow)) = tokens.peek() {
-            if token_stack.last() == Some(&Token::Keyword(Arrow)) {
-                token_stack.pop();
-                tokens.next();
-            }
-        }
+        consume(Token::Keyword(Arrow), tokens)?;
+        token_stack.pop();
 
-        identifier_stack.extend(pattern_stack.clone());
         let arm = parse(tokens, token_stack, &mut identifier_stack, sum_types)?;
-        for _ in pattern_stack {
+        if binds_name {
             identifier_stack.pop();
         }
 
@@ -206,10 +206,10 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
     Ok(Term::Case(Box::new(arg), cases, Box::new(default)))
 }
 
-fn parse_pattern(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Pattern, String> {
+fn parse_pattern(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, sum_types: &SumTypeDefs) -> Result<Pattern, String> {
     match tokens.next() {
         Some(Token::Open) => {
-            let pat = parse_pattern(tokens, token_stack, identifier_stack, sum_types)?;
+            let pat = parse_pattern(tokens, token_stack, sum_types)?;
             consume(Token::Close, tokens)?;
             Ok(pat)
         },
@@ -220,8 +220,7 @@ fn parse_pattern(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<T
             if &s == "_" {
                 Ok(Pattern::Wildcard)
             } else {
-                identifier_stack.push(s.clone());
-                Ok(Pattern::Var(0, s))
+                Ok(Pattern::Var(s))
             }
         },
         Some(Token::Constructor(s)) => {
@@ -229,7 +228,7 @@ fn parse_pattern(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<T
             let pat = if let Some(&Token::Keyword(Arrow)) = tokens.peek() {
                 Pattern::Atom(Atom::Unit)
             } else {
-                parse_pattern(tokens, token_stack, identifier_stack, sum_types)?
+                parse_pattern(tokens, token_stack, sum_types)?
             };
             Ok(Pattern::Sum(k, s, Box::new(pat)))
         },
@@ -385,7 +384,7 @@ mod tests {
             Term::Case(arg, cases, default) => {
                 assert_eq!(*arg, Term::App(Box::new(Term::Constructor(0, String::from("Just"))), Box::new(Term::Atom(Atom::Int(10)))));
                 assert_eq!(*default, Term::Atom(Atom::Int(5)));
-                assert_eq!(cases, vec![(Pattern::Sum(0, String::from("Just"), Box::new(Pattern::Atom(Atom::Int(0)))), Term::Atom(Atom::Int(42))), (Pattern::Sum(0, String::from("Just"), Box::new(Pattern::Var(0, String::from("x")))), Term::Var(0, String::from("x"))), (Pattern::Sum(1, String::from("None"), Box::new(Pattern::Atom(Atom::Unit))), Term::Atom(Atom::Int(100))), (Pattern::Wildcard, Term::Atom(Atom::Int(777)))]);
+                assert_eq!(cases, vec![(Pattern::Sum(0, String::from("Just"), Box::new(Pattern::Atom(Atom::Int(0)))), Term::Atom(Atom::Int(42))), (Pattern::Sum(0, String::from("Just"), Box::new(Pattern::Var(String::from("x")))), Term::Var(0, String::from("x"))), (Pattern::Sum(1, String::from("None"), Box::new(Pattern::Atom(Atom::Unit))), Term::Atom(Atom::Int(100))), (Pattern::Wildcard, Term::Atom(Atom::Int(777)))]);
             },
             x => panic!("Expected case expression but got {:?}", x)
         }

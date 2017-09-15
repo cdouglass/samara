@@ -8,14 +8,14 @@ pub enum Pattern {
     Wildcard,
     Sum(usize, String, Box<Pattern>),
     Atom(Atom),
-    Var(usize, String)
+    Var(String)
 }
 
 #[derive(Debug)]
 #[derive(Clone)]
 #[derive(PartialEq)]
 pub enum Match {
-    Binding(usize, Term),
+    Binding(Term),
     Plain
 }
 
@@ -38,10 +38,18 @@ impl Pattern {
                     Some(Match::Plain)
                 } else { None }
             },
-            (&Pattern::Var(ref n, _), _) => {
-                Some(Match::Binding(*n, term.clone()))
+            (&Pattern::Var(_), _) => {
+                Some(Match::Binding(term.clone()))
             },
             _ => None
+        }
+    }
+
+    pub fn identifiers(&self) -> Vec<&String> {
+        match *self {
+            Pattern::Var(ref s) => vec![s],
+            Pattern::Sum(_, _, ref pat) => pat.identifiers(),
+            _ => vec![]
         }
     }
 }
@@ -92,25 +100,25 @@ mod tests {
 
     #[test]
     fn test_irrefutable_pattern() {
-        let irrefutable = Var(1, String::from("x"));
+        let irrefutable = Var(String::from("x"));
         let five = Term::Atom(Atom::Int(5));
         let square = Term::Lambda(Box::new(Term::App(Box::new(Term::App(Box::new(Term::Atom(Atom::BuiltIn(Op::Mul))), Box::new(Term::Var(0, String::from("y"))))), Box::new(Term::Var(0, String::from("y"))))), String::from("square"));
         let none = Term::Sum(NONE, String::from("None"), vec![]);
         let unit = Term::Atom(Atom::Unit);
 
-        assert_eq!(irrefutable.match_term(&five), Some(Match::Binding(1, five)));
-        assert_eq!(irrefutable.match_term(&square), Some(Match::Binding(1, square)));
-        assert_eq!(irrefutable.match_term(&none), Some(Match::Binding(1, none)));
-        assert_eq!(irrefutable.match_term(&unit), Some(Match::Binding(1, unit)));
+        assert_eq!(irrefutable.match_term(&five), Some(Match::Binding(five)));
+        assert_eq!(irrefutable.match_term(&square), Some(Match::Binding(square)));
+        assert_eq!(irrefutable.match_term(&none), Some(Match::Binding(none)));
+        assert_eq!(irrefutable.match_term(&unit), Some(Match::Binding(unit)));
     }
 
     #[test]
     fn test_sum_pattern() {
-        let irrefutable = Var(1, String::from("x"));
+        let irrefutable = Var(String::from("x"));
         let pat = Sum(LEFT, String::from("Left"), Box::new(irrefutable));
         let square = Term::Lambda(Box::new(Term::App(Box::new(Term::App(Box::new(Term::Atom(Atom::BuiltIn(Op::Mul))), Box::new(Term::Var(0, String::from("y"))))), Box::new(Term::Var(0, String::from("y"))))), String::from("square"));
 
-        let expected = Match::Binding(1, square.clone());
+        let expected = Match::Binding(square.clone());
         let actual = pat.match_term(&Term::Sum(LEFT, String::from("Left"), vec![square.clone()]));
         assert_eq!(actual, Some(expected));
 
@@ -121,13 +129,13 @@ mod tests {
 
     #[test]
     fn test_nested_irrefutable_pattern() {
-        let irrefutable = Var(1, String::from("x"));
+        let irrefutable = Var(String::from("x"));
         // Just(Left(Right(x)))
         let pat = Sum(JUST, String::from("Just"), Box::new(Sum(LEFT, String::from("Left"), Box::new(Sum(RIGHT, String::from("Right"), Box::new(irrefutable))))));
         let id = Term::Lambda(Box::new(Term::Var(0, String::from("y"))), String::from("id"));
 
         let matching_term = Term::Sum(JUST, String::from("Just"), vec![Term::Sum(LEFT, String::from("Left"), vec![Term::Sum(RIGHT, String::from("Right"), vec![id.clone()])])]);
-        assert_eq!(pat.match_term(&matching_term), Some(Match::Binding(1, id.clone())));
+        assert_eq!(pat.match_term(&matching_term), Some(Match::Binding(id.clone())));
 
         let not_quite = Term::Sum(JUST, String::from("Just"), vec![Term::Sum(RIGHT, String::from("Right"), vec![Term::Sum(RIGHT, String::from("Right"), vec![id.clone()])])]);
         assert_eq!(pat.match_term(&not_quite), None);

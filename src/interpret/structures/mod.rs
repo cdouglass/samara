@@ -120,7 +120,7 @@ impl Debug for Term {
                 let value_string = values.iter().fold(String::new(), |acc, next| acc + &format!(" {:?}", next));
                 write!(f, "{}{}", constructor, value_string)
             }
-            Term::Case(_, _, _) => unimplemented!()
+            Term::Case(_, _, _) => write!(f, "<Case>") // TODO
         }
     }
 }
