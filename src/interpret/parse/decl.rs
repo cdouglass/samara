@@ -44,29 +44,30 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_t
 fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<(String, Vec<Type>), String> {
     let name = get_sum(tokens, "Missing constructor in right-hand side of type declaration")?;
     let mut token_stack = vec![];
-    let typ = parse_type(tokens, &mut token_stack, vars, sum_types)?;
-
-    if !token_stack.is_empty() {
-        return Err(String::from("Unexpected end of input"));
-    }
-
-    match tokens.peek().cloned() {
-        Some(Token::Separator) => { tokens.next(); },
-        Some(Token::Sum(_)) | None => { },
-        Some(tok) => {
-            return Err(String::from(format!("Unexpected token {:?} in right-hand side of type declaration", tok)));
-        }
-    }
-
     let mut arg_types = vec![];
-    if typ != Type::Unit {
+
+    loop {
+        match tokens.peek() {
+            Some(&Token::Separator) => {
+                tokens.next();
+                break;
+            },
+            None => { break; },
+            _ => { }
+        }
+
+        let typ = parse_type(tokens, &mut token_stack, vars, sum_types)?;
         arg_types.push(typ);
     }
+
+    if !token_stack.is_empty() {
+        return Err(String::from("Unexpected end of input111"));
+    }
+
     Ok((String::from(name), arg_types))
 }
 
 fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<Type, String> {
-
     let mut typ : Type;
 
     match tokens.next() {
@@ -85,24 +86,19 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
                 _ => { }
             }
         },
-        Some(Token::Bool) => {
-            typ = Type::Bool;
-        },
-        Some(Token::Int) => {
-            typ = Type::Int;
-        },
-        Some(Token::Separator) | None => {
-            return Ok(Type::Unit);
-        },
-        Some(Token::Unit) => {
-            typ = Type::Unit;
-        },
+        Some(Token::Bool) => { typ = Type::Bool; },
+        Some(Token::Int) => { typ = Type::Int; },
+        Some(Token::Unit) => { typ = Type::Unit; },
+        Some(Token::Separator) | None => { return Err(String::from("Unexpected end of input")); },
         Some(Token::Sum(ref s)) => {
             match sum_types.type_from_name(s) {
                 Some(t) => {
                     let mut parameters = vec![];
                     while parameters.len() < t.params.len() {
-                        //TODO this will fill up with Units - is that a problem?
+                        match tokens.peek() {
+                            Some(&Token::Separator) | None => { break; },
+                            _ => { }
+                        }
                         let param = parse_type(tokens, token_stack, vars, sum_types)?;
                         parameters.push(param);
                     }
@@ -130,14 +126,14 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
         }
     }
 
-    match tokens.peek().cloned() {
-        Some(Token::Arrow) => {
+    match tokens.peek() {
+        Some(&Token::Arrow) => {
             tokens.next();
             let input_type = typ.clone();
             let output_type = parse_type(tokens, &mut token_stack, vars, sum_types)?;
             typ = arrow(input_type, output_type);
         },
-        Some(Token::Close) => {
+        Some(&Token::Close) => {
             if let Some(Token::Open) = token_stack.pop() {
                 tokens.next();
             } else {
@@ -278,15 +274,6 @@ mod tests {
 
         let variant = parse_variant(&mut tokens, &HashMap::new(), &SumTypeDefs::new()).unwrap();
         assert_eq!(&variant.0, "Full");
-    }
-
-    #[test]
-    fn test_applying_non_operator_to_type() {
-        let mut sum_types = SumTypeDefs::new();
-        sum_types.add_type("Foo", vec![], vec![]).unwrap();
-        let msg = "Unexpected token Int in right-hand side of type declaration";
-        let err = parse_variant(&mut build_lexer("Foo Int Int"), &HashMap::new(), &sum_types).unwrap_err();
-        assert_eq!(&err, msg)
     }
 
     /* Test parse */
