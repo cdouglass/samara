@@ -162,7 +162,7 @@ fn test_type_of_using_session_bindings() {
 }
 
 #[test]
-fn test_case_expression() {
+fn test_evaluate_case_expression() {
     let mut bindings = vec![];
     let mut gen = GenTypeVar::new();
     let mut sum_types = SumTypeDefs::new();
@@ -173,4 +173,22 @@ fn test_case_expression() {
     assert_evaluates_to_atom_with_context("case None of 100; Just 10 -> 42; Just x -> x", &mut bindings, &mut gen, &sum_types, Atom::Int(100));
 
     assert_evaluates_to_atom_with_context("case Just(Just 4) of 100; Just(Just x) -> (* x x); Just None -> 5", &mut bindings, &mut gen, &sum_types, Atom::Int(16));
+}
+
+#[test]
+fn test_binding_in_case_expression() {
+    let mut bindings = vec![];
+    let mut gen = GenTypeVar::new();
+    let sum_types = SumTypeDefs::new();
+    evaluate("let x = 5", &mut bindings, &mut gen, &sum_types).unwrap();
+
+    let exprs = vec!["case x of 0; y -> x", "case 1 of 0; y -> x", "case x of 0; _ -> x", "case x of 0; x -> x"];
+
+    for e in exprs {
+        let typ = type_of(e, &bindings, &mut gen, &sum_types).1.unwrap();
+        assert_eq!(typ, Type::Int);
+        assert_evaluates_to_atom_with_context(e, &mut bindings, &mut gen, &sum_types, Atom::Int(5));
+    }
+    assert_evaluates_to_atom_with_context("case 1 of 0; x -> x", &mut bindings, &mut gen, &sum_types, Atom::Int(1));
+    assert_evaluates_to_atom_with_context("case x of 0; _ -> 1", &mut bindings, &mut gen, &sum_types, Atom::Int(1));
 }
