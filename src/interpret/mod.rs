@@ -113,15 +113,9 @@ fn reduce(ast: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -
             for &(ref pattern, ref arm) in &cases {
                 match pattern.match_term(&reduce(*arg.clone(), session_bindings, sum_types)?) {
                     Some(values) => {
-                        //TODO iterate for val in values
-                        //each will have different index to substitute at
-                        //so how do I handle unshift_indices?
-                        if values.is_empty() {
-                            return reduce(arm.clone(), session_bindings, sum_types);
-                        } else {
-                            let subbed_arm = sub_at_index(arm.clone(), &values[0], 0);
-                            return reduce(unshift_indices(subbed_arm, 1), session_bindings, sum_types);
-                        }
+                        let f = |acc, val| { unshift_indices(sub_at_index(acc, val, 0), 1) };
+                        let subbed_arm = values.iter().rev().fold(arm.clone(), f);
+                        return reduce(subbed_arm, session_bindings, sum_types);
                     },
                     None => { }
                 }
