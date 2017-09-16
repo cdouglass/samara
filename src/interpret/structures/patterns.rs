@@ -39,9 +39,9 @@ impl Pattern {
         }
     }
 
-    pub fn identifiers(&self) -> Vec<&String> {
+    pub fn identifiers(&self) -> Vec<String> {
         match *self {
-            Pattern::Var(ref s) => vec![s],
+            Pattern::Var(ref s) => vec![s.clone()],
             Pattern::Sum(_, _, ref patterns) => {
                 patterns.iter().fold(vec![], (|mut v, pat| {
                     v.extend(pat.identifiers());

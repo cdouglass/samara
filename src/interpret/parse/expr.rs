@@ -184,20 +184,16 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
         token_stack.push(Token::Keyword(Arrow));
 
         let pattern = parse_pattern(tokens, token_stack, sum_types)?;
-        let binds_name = match pattern.identifiers().last().cloned() {
-            Some(s) => {
-                identifier_stack.push(s.clone());
-                true
-            },
-            None => false
-        };
+        let vars = pattern.identifiers();
+        for v in &vars {
+            identifier_stack.push((*v).clone())
+        }
 
-        //TODO
         consume(Token::Keyword(Arrow), tokens)?;
         token_stack.pop();
 
         let arm = parse(tokens, token_stack, &mut identifier_stack, sum_types)?;
-        if binds_name {
+        for _ in vars {
             identifier_stack.pop();
         }
 
