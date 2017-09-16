@@ -88,8 +88,6 @@ fn reduce(ast: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -
             }
         },
         Let(name, value, body) => {
-            // for now, same as lambda application except with sugar for self-reference
-            // BUT will have to change once types are enforced
             match reduce(fix(name.clone(), *value), session_bindings, sum_types) {
                 Ok(val) => {
                     match body {
