@@ -105,10 +105,11 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             None => {
                 if *token_stack == vec![Token::Keyword(In)] || token_stack.is_empty() {
                     break;
-                } else if let Some(&Token::Keyword(Semicolon)) = token_stack.last() {
-                    break;
                 } else {
-                    return end_of_input_err;
+                    match token_stack.last() {
+                        Some(&Token::Keyword(Semicolon)) | Some(&Token::Keyword(Arrow)) => { break; },
+                        _ => { return end_of_input_err; }
+                    }
                 }
             }
         };
@@ -288,7 +289,7 @@ mod tests {
     use interpret::structures::Term;
     use interpret::structures::Type;
 
-    fn assert_parse(expr: &str, expected: Term) {
+    fn assert_parse(expr: &str, expected: &Term) {
         let mut token_stack = vec![];
         let mut ids = vec![];
         let sum_types = SumTypeDefs::new();
@@ -301,7 +302,7 @@ mod tests {
                 println!("Expected term {:?} but got error {}", expected, msg);
                 panic!()
             },
-            Ok(term) => assert_eq!(term, expected)
+            Ok(term) => assert_eq!(term, *expected)
         }
     }
 
@@ -320,6 +321,13 @@ mod tests {
                 panic!()
             }
         }
+    }
+
+    #[test]
+    fn test_lambda_without_parens() {
+        let expected = Term::Lambda(Box::new(Term::Var(0, String::from("x"))), String::from("x"));
+        assert_parse("(\\x -> x)", &expected);
+        assert_parse("\\x -> x", &expected);
     }
 
     #[test]
@@ -343,12 +351,13 @@ mod tests {
 
     #[test]
     fn test_parses_unit() {
-        assert_parse("()", Term::Atom(Atom::Unit));
+        assert_parse("()", &Term::Atom(Atom::Unit));
     }
 
     #[test]
     fn test_unit_as_argument() {
-        assert_parse("(\\x -> 5) ()", Term::App(Box::new(Term::Lambda(Box::new(Term::Atom(Atom::Int(5))), String::from("x"))), Box::new(Term::Atom(Atom::Unit))));
+        let expected = Term::App(Box::new(Term::Lambda(Box::new(Term::Atom(Atom::Int(5))), String::from("x"))), Box::new(Term::Atom(Atom::Unit)));
+        assert_parse("(\\x -> 5) ()", &expected);
     }
 
     #[test]
