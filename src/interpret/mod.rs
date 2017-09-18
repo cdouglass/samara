@@ -144,7 +144,6 @@ fn apply(func: Term, arg: Term, session_bindings: &[LetBinding], sum_types: &Sum
                         Mul => Int(m * n),
                         Div => Int(m / n),
                         Mod => Int(m % n),
-                        Exp => Int(m ^ n),
                         Eql => Bool(m == n),
                         Gt  => Bool(m > n),
                         Lt  => Bool(m < n),

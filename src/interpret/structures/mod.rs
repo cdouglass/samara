@@ -34,7 +34,6 @@ pub enum Op {
     Mul,
     Div,
     Mod,
-    Exp,
     Eql,
     Gt,
     Lt
@@ -81,7 +80,6 @@ impl Debug for Op {
             Mul => "*" ,
             Div => "//",
             Mod => "%" ,
-            Exp => "^",
             Eql => "==",
             Gt  => ">",
             Lt  => "<",
@@ -170,7 +168,6 @@ impl FromStr for Op {
             "*"  => Ok(Mul),
             "//" => Ok(Div),
             "%"  => Ok(Mod),
-            "^"  => Ok(Exp),
             "==" => Ok(Eql),
             ">"  => Ok(Gt),
             "<"  => Ok(Lt),
