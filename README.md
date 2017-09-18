@@ -2,6 +2,23 @@
 
 This is an interpreter for a small pure functional programming language based on the simply-typed lambda calculus with [type inference](https://en.wikipedia.org/wiki/Hindley%E2%80%93Milner_type_inference). Syntax is loosely based on [Elm](http://elm-lang.org/).
 
+## Setup
+
+You will need `cargo` and `rustc` installed. You can get them [here](https://www.rust-lang.org/en-US/install.html) using the `rustup` tool.
+
+## Usage
+
+Clone this repository and navigate to this directory in a terminal. To start the REPL, run
+```
+$ cargo run
+```
+
+Within the REPL, you can declare a new type
+```
+> type Either a b = Left a | Right b
+```
+or enter an expression to evaluate. Aside from this, all commands begin with `:`: `:exit` to exit the REPL, `:type` followed by an expression to ask the type of that expression, and `:help` for help.
+
 ## Examples
 
 ### Arithmetic
