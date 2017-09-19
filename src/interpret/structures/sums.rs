@@ -3,26 +3,18 @@ use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use interpret::structures::arrow;
 use interpret::structures::Term;
 use interpret::structures::Type;
 
 #[derive(Debug)]
+#[derive(Clone)]
 pub struct ConstructorBinding {
     pub tag: String,
-    arg_types: Vec<Type>,
-    result_type: Type
+    pub arg_types: Vec<Type>,
+    pub result_type: SumType
 }
 
 impl ConstructorBinding {
-    pub fn typ(&self) -> Type {
-        let mut t = self.result_type.clone();
-        for a in self.arg_types.iter().rev() {
-            t = arrow(a.clone(), t.clone());
-        }
-        t
-    }
-
     // silly
     pub fn term(&self, index: usize) -> Term {
         let mut values = vec![];
@@ -65,13 +57,13 @@ impl SumTypeDefs {
         }
 
         let new_typ = SumType::new(name, constructors.clone(), params.clone());
-        self.types.insert(String::from(name), new_typ.clone());
-
         for (tag, arg_types) in constructors {
             self.constructors.insert(tag.clone(), String::from(name));
-            let binding = ConstructorBinding{tag: tag, arg_types: arg_types, result_type: Type::Sum(new_typ.clone())};
+            let binding = ConstructorBinding{tag: tag, arg_types: arg_types, result_type: new_typ.clone()};
             self.bindings.push(binding);
         }
+
+        self.types.insert(String::from(name), new_typ);
 
         Ok(())
     }

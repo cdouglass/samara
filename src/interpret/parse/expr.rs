@@ -190,7 +190,7 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
             identifier_stack.push((*v).clone())
         }
 
-        consume(Token::Keyword(Arrow), tokens)?;
+        consume(&Token::Keyword(Arrow), tokens)?;
         token_stack.pop();
 
         let arm = parse(tokens, token_stack, &mut identifier_stack, sum_types)?;
@@ -248,10 +248,10 @@ fn parse_pattern(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<T
 }
 
 //TODO use this elsewhere
-fn consume(tok: Token, tokens: &mut Peekable<TokenStream>) -> Result<(), String> {
+fn consume(tok: &Token, tokens: &mut Peekable<TokenStream>) -> Result<(), String> {
     match tokens.next() {
         Some(t) => {
-            if t == tok {
+            if t == *tok {
                 Ok(())
             } else {
                 Err(format!("Expecting {:?} but instead got {:?}", tok, t))
@@ -268,12 +268,12 @@ fn parse_int(s: &str) -> Result<Atom, String> {
 }
 
 fn parse_operator(s: &str) -> Result<Atom, String> {
-    Op::from_str(&s).map(Atom::BuiltIn)
+    Op::from_str(s).map(Atom::BuiltIn)
 }
 
 fn identify_constructor(s: &str, sum_types: &SumTypeDefs) -> Result<usize, String> {
     let mut binding_iter = sum_types.bindings.iter();
-    match binding_iter.position(|x| &x.tag == s) {
+    match binding_iter.position(|x| x.tag == s) {
         Some(k) => Ok(k),
         None => Err(String::from(format!("Unknown constructor {}", s)))
     }

@@ -47,7 +47,7 @@ pub fn declare_sum_type(decl: &str, mut gen: &mut GenTypeVar, mut sum_types: &mu
 }
 
 fn parse_from_str(expr: &str, bindings: &[LetBinding], sum_types: &SumTypeDefs) -> Result<Term, String> {
-    let mut identifiers: Vec<String> = bindings.into_iter().map(|x| x.name.clone()).collect();
+    let mut identifiers: Vec<String> = bindings.iter().map(|x| x.name.clone()).collect();
     match build_lexer(expr.trim()) {
         TokenStream::Expr(mut tokens) => parse_expr(&mut tokens, &mut identifiers, sum_types),
         _ => panic!()
@@ -60,11 +60,12 @@ pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<LetBinding>, mut gen:
         (Ok(ast), Ok(typ)) => {
             let term = reduce(ast, session_bindings, sum_types)?;
 
-            if let Let(ref s, ref value, None) = term {
-                session_bindings.push(LetBinding{name: s.clone(), term: *value.clone(), typ: typ.clone()});
+            if let Let(s, value, None) = term {
+                session_bindings.push(LetBinding{name: s, term: *value.clone(), typ: typ});
+                Ok(*value)
+            } else {
+                Ok(term)
             }
-
-            Ok(term)
         }
     }
 }
@@ -100,7 +101,7 @@ fn reduce(ast: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -
         },
         // if not defined, would already have blown up in parse
         Var(n, _) => Ok(session_bindings[session_bindings.len() - n - 1].term.clone()),
-        Constructor(n, _) => Ok(sum_types.bindings[n].term(n).clone()),
+        Constructor(n, _) => Ok(sum_types.bindings[n].term(n)),
         Sum(n, constructor, values) => {
             let mut new_values = vec![];
             for val in values {
@@ -110,17 +111,15 @@ fn reduce(ast: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -
             Ok(Sum(n, constructor, new_values))
         }
         Case(arg, cases, default) => {
-            for &(ref pattern, ref arm) in &cases {
-                match pattern.match_term(&reduce(*arg.clone(), session_bindings, sum_types)?) {
-                    Some(values) => {
-                        let f = |acc, val| { unshift_indices(sub_at_index(acc, val, 0), 1) };
-                        let subbed_arm = values.iter().rev().fold(arm.clone(), f);
-                        return reduce(subbed_arm, session_bindings, sum_types);
-                    },
-                    None => { }
+            let reduced_arg = reduce(*arg, session_bindings, sum_types)?;
+            for (pattern, arm) in cases {
+                if let Some(values) = pattern.match_term(&reduced_arg) {
+                    let f = |acc, val: &Term| { unshift_indices(sub_at_index(acc, val, 0), 1) };
+                    let subbed_arm = values.iter().rev().fold(arm, f);
+                    return reduce(subbed_arm, session_bindings, sum_types);
                 }
             }
-            reduce(*default.clone(), session_bindings, sum_types)
+            reduce(*default, session_bindings, sum_types)
         },
         term => Ok(term)
     }
@@ -167,7 +166,7 @@ fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
         Atom(a) => Atom(a),
         Constructor(n, constructor) => Constructor(n, constructor),
         Sum(n, constructor, values) => {
-            let subbed_values = values.iter().map(|val| sub_at_index(val.clone(), t, index)).collect();
+            let subbed_values = values.into_iter().map(|val| sub_at_index(val, t, index)).collect();
             Sum(n, constructor, subbed_values)
         },
         Case(arg, cases, default) => {
@@ -175,9 +174,9 @@ fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
             let new_default = sub_at_index(*default, t, index);
 
             let mut new_cases = vec![];
-            for &(ref pattern, ref arm) in &cases {
-                let new_arm = sub_at_index(arm.clone(), t, index + 1);
-                new_cases.push((pattern.clone(), new_arm));
+            for (pattern, arm) in cases {
+                let new_arm = sub_at_index(arm, t, index + 1);
+                new_cases.push((pattern, new_arm));
             }
             Case(Box::new(new_arg), new_cases, Box::new(new_default))
         },
@@ -192,7 +191,7 @@ fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
         },
         Var(n, s) => {
             if n == index {
-                shift_indices(t, index, 0)
+                shift_indices(t.clone(), index, 0)
             } else { Var(n, s) }
         },
         Conditional(pred, true_case, false_case) => {
@@ -210,42 +209,42 @@ fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
     }
 }
 
-fn shift_indices(term: &Term, distance: usize, cutoff: usize) -> Term {
-    match *term {
-        Atom(ref a) => Atom(a.clone()),
-        Constructor(ref n, ref constructor) => Constructor(*n, constructor.clone()),
-        Sum(ref n, ref constructor, ref value) => Sum(*n, constructor.clone(), value.clone()),
-        Case(ref arg, ref cases, ref default) => {
-            let new_arg = shift_indices(arg, distance, cutoff);
-            let new_default = shift_indices(default, distance, cutoff);
+fn shift_indices(term: Term, distance: usize, cutoff: usize) -> Term {
+    match term {
+        Atom(a) => Atom(a),
+        Constructor(n, constructor) => Constructor(n, constructor),
+        Sum(n, constructor, values) => Sum(n, constructor, values),
+        Case(arg, cases, default) => {
+            let new_arg = shift_indices(*arg, distance, cutoff);
+            let new_default = shift_indices(*default, distance, cutoff);
             let mut new_cases = vec![];
-            for &(ref pattern, ref arm) in cases.iter() {
+            for (pattern, arm) in cases {
                 let new_arm = shift_indices(arm, distance, cutoff + 1);
-                new_cases.push((pattern.clone(), new_arm));
+                new_cases.push((pattern, new_arm));
             }
             Case(Box::new(new_arg), new_cases, Box::new(new_default))
         },
-        App(ref a, ref b) => {
-            let a_ = shift_indices(a, distance, cutoff);
-            let b_ = shift_indices(b, distance, cutoff);
+        App(a, b) => {
+            let a_ = shift_indices(*a, distance, cutoff);
+            let b_ = shift_indices(*b, distance, cutoff);
             App(Box::new(a_), Box::new(b_))
-        }, Lambda(ref lambda_body, ref s) => {
-            Lambda(Box::new(shift_indices(lambda_body, distance, cutoff + 1)), s.clone())
+        }, Lambda(lambda_body, s) => {
+            Lambda(Box::new(shift_indices(*lambda_body, distance, cutoff + 1)), s)
         },
-        Var(ref n, ref s) => {
-            let m = if *n >= cutoff { *n + 1 } else { *n };
-            Var(m, s.clone())
+        Var(n, s) => {
+            let m = if n >= cutoff { n + 1 } else { n };
+            Var(m, s)
         },
-        Conditional(ref pred, ref true_case, ref false_case) => {
-            let shifted_pred = shift_indices(pred, distance, cutoff);
-            let shifted_true_case = shift_indices(true_case, distance, cutoff);
-            let shifted_false_case = shift_indices(false_case, distance, cutoff);
+        Conditional(pred, true_case, false_case) => {
+            let shifted_pred = shift_indices(*pred, distance, cutoff);
+            let shifted_true_case = shift_indices(*true_case, distance, cutoff);
+            let shifted_false_case = shift_indices(*false_case, distance, cutoff);
             Conditional(Box::new(shifted_pred), Box::new(shifted_true_case), Box::new(shifted_false_case))
         },
-        Let(ref name, ref value, ref body) => {
-            let shifted_value = shift_indices(value, distance, cutoff + 1);
-            let shifted_body = body.clone().map(|b| Box::new(shift_indices(&b, distance, cutoff + 1)));
-            Let(name.clone(), Box::new(shifted_value), shifted_body)
+        Let(name, value, body) => {
+            let shifted_value = shift_indices(*value, distance, cutoff + 1);
+            let shifted_body = body.map(|b| Box::new(shift_indices(*b, distance, cutoff + 1)));
+            Let(name, Box::new(shifted_value), shifted_body)
         }
     }
 }
@@ -255,16 +254,16 @@ fn unshift_indices(term: Term, cutoff: usize) -> Term {
         Atom(a) => Atom(a),
         Constructor(n, constructor) => Constructor(n, constructor),
         Sum(n, constructor, values) => {
-            let new_values = values.iter().map(|val| unshift_indices(val.clone(), cutoff)).collect();
+            let new_values = values.into_iter().map(|val| unshift_indices(val, cutoff)).collect();
             Sum(n, constructor, new_values)
         },
         Case(arg, cases, default) => {
             let new_arg = unshift_indices(*arg, cutoff);
             let new_default = unshift_indices(*default, cutoff);
             let mut new_cases = vec![];
-            for &(ref pattern, ref arm) in &cases {
-                let new_arm = unshift_indices(arm.clone(), cutoff + 1);
-                new_cases.push((pattern.clone(), new_arm));
+            for (pattern, arm) in cases {
+                let new_arm = unshift_indices(arm, cutoff + 1);
+                new_cases.push((pattern, new_arm));
             }
             Case(Box::new(new_arg), new_cases, Box::new(new_default))
         },
