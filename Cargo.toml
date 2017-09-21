@@ -1,6 +1,7 @@
 [package]
 name = "samara"
 version = "0.1.0"
+build = "build.rs"
 authors = ["Cathy Douglass <cdouglass256@gmail.com>"]
 
 [lib]
@@ -12,4 +13,8 @@ name = "samara"
 path = "src/main.rs"
 doc = false
 
-[dependencies]
+[build-dependencies]
+skeptic = "0.13"
+
+[dev-dependencies]
+skeptic = "0.13"
