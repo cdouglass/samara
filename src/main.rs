@@ -1,8 +1,14 @@
+extern crate samara;
+
+use samara::declare_sum_type;
+use samara::evaluate;
+use samara::type_of;
+use samara::SumTypeDefs;
+use samara::infer::GenTypeVar;
+
 use std::io;
 use std::io::Write;
 use std::iter::Iterator;
-
-mod interpret;
 
 const CMD_MARKER : char = ':';
 const CONTINUE_LINE : char = '\\';
@@ -36,8 +42,6 @@ fn get_command(input: &str) -> Option<Command> {
 }
 
 fn main() {
-    use interpret::SumTypeDefs;
-    use interpret::infer::GenTypeVar;
     println!("{}", GREETING);
     let mut bindings = vec![];
     let mut gen_type_var = GenTypeVar::new();
@@ -69,7 +73,7 @@ fn main() {
             Some(Command::Exit) => break,
             Some(Command::Help) => println!("{}", USAGE),
             Some(Command::TypeOf(s)) => {
-                let result = interpret::type_of(&s, &bindings, &mut gen_type_var, &sum_type_defs);
+                let result = type_of(&s, &bindings, &mut gen_type_var, &sum_type_defs);
                 match result {
                     (Ok(term), Ok(typ)) => println!("{:?} : {:?}", term, typ),
                     (Err(msg), _) | (_, Err(msg)) => println!("{}", msg)
@@ -78,13 +82,13 @@ fn main() {
             Some(Command::Unknown) => println!("Unknown command"),
             None => {
                 if expr.starts_with("type ") {
-                    let new_sum_type = interpret::declare_sum_type(&expr[5..], &mut gen_type_var, &mut sum_type_defs);
+                    let new_sum_type = declare_sum_type(&expr[5..], &mut gen_type_var, &mut sum_type_defs);
                     match new_sum_type {
                         Ok(sum) => println!("{:?}", sum),
                         Err(msg) => println!("{:?}", msg)
                     }
                 } else {
-                    let result = interpret::evaluate(&expr, &mut bindings, &mut gen_type_var, &sum_type_defs);
+                    let result = evaluate(&expr, &mut bindings, &mut gen_type_var, &sum_type_defs);
                     match result {
                         Ok(term) => println!("{:?}", term),
                         Err(msg) => println!("{}", msg)

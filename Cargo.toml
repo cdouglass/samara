@@ -3,4 +3,13 @@ name = "samara"
 version = "0.1.0"
 authors = ["Cathy Douglass <cdouglass256@gmail.com>"]
 
+[lib]
+name = "samara"
+path = "src/lib.rs"
+
+[[bin]]
+name = "samara"
+path = "src/main.rs"
+doc = false
+
 [dependencies]

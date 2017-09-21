@@ -1,13 +1,13 @@
-use interpret::declare_sum_type;
-use interpret::evaluate;
-use interpret::type_of;
-use interpret::GenTypeVar;
-use interpret::SumTypeDefs;
-use interpret::structures::Atom;
-use interpret::structures::LetBinding;
-use interpret::structures::Op;
-use interpret::structures::Term;
-use interpret::structures::Type;
+use declare_sum_type;
+use evaluate;
+use type_of;
+use GenTypeVar;
+use SumTypeDefs;
+use structures::Atom;
+use structures::LetBinding;
+use structures::Op;
+use structures::Term;
+use structures::Type;
 
 /* Test helpers */
 

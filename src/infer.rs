@@ -2,16 +2,16 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::Iterator;
 
-use interpret::SumTypeDefs;
-use interpret::structures::arrow;
-use interpret::structures::Atom;
-use interpret::structures::LetBinding;
-use interpret::structures::Op;
-use interpret::structures::Term;
-use interpret::structures::Type;
-use interpret::structures::Type::*;
-use interpret::structures::patterns::Pattern;
-use interpret::structures::sums::ConstructorBinding;
+use SumTypeDefs;
+use structures::arrow;
+use structures::Atom;
+use structures::LetBinding;
+use structures::Op;
+use structures::Term;
+use structures::Type;
+use structures::Type::*;
+use structures::patterns::Pattern;
+use structures::sums::ConstructorBinding;
 
 pub fn infer_type(term: &Term, bindings: &[LetBinding], mut gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<Type, String> {
     let mut context = vec![];
@@ -347,9 +347,9 @@ fn base_type(atom: &Atom) -> Type {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use interpret::evaluate;
-    use interpret::SumTypeDefs;
-    use interpret::structures::sums::SumType;
+    use evaluate;
+    use SumTypeDefs;
+    use structures::sums::SumType;
     use self::LetBinding;
     use self::Op::*;
 
@@ -532,7 +532,7 @@ mod tests {
 
     mod test_sum_types {
         use super::*;
-        use interpret::structures::patterns::Pattern;
+        use structures::patterns::Pattern;
 
         const LEFT: usize = 0;
         const RIGHT: usize = 1;
@@ -659,7 +659,7 @@ mod tests {
 
         #[test]
         fn test_sum_from_binary_constructor() {
-            use interpret::declare_sum_type;
+            use declare_sum_type;
             let mut gen = GenTypeVar::new();
             let mut sum_types = SumTypeDefs::new();
             declare_sum_type("Pair = Pair Int Bool", &mut gen, &mut sum_types).unwrap();

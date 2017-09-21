@@ -2,13 +2,13 @@ use std::collections::HashMap;
 use std::iter::Iterator;
 use std::iter::Peekable;
 
-use interpret::infer::GenTypeVar;
-use interpret::lex::decl::Token;
-use interpret::lex::decl::TokenStream;
-use interpret::structures::arrow;
-use interpret::structures::Type;
-use interpret::structures::sums::SumType;
-use interpret::structures::sums::SumTypeDefs;
+use infer::GenTypeVar;
+use lex::decl::Token;
+use lex::decl::TokenStream;
+use structures::arrow;
+use structures::Type;
+use structures::sums::SumType;
+use structures::sums::SumTypeDefs;
 
 pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<SumType, String> {
     let name = get_sum(tokens, "Type declaration must begin with an uppercase name")?;
@@ -156,11 +156,11 @@ fn get_sum(mut tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use interpret::structures::arrow;
-    use interpret::structures::Type::TypeVar;
-    use interpret::structures::sums::SumType;
-    use interpret::infer::GenTypeVar;
-    use interpret::lex::decl::build_lexer;
+    use structures::arrow;
+    use structures::Type::TypeVar;
+    use structures::sums::SumType;
+    use infer::GenTypeVar;
+    use lex::decl::build_lexer;
 
     /* Test parse_type */
 

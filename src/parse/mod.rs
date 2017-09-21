@@ -1,8 +1,8 @@
 use std::iter::Peekable;
 
-use interpret::SumTypeDefs;
-use interpret::lex::expr::TokenStream as ETokenStream;
-use interpret::structures::Term;
+use SumTypeDefs;
+use lex::expr::TokenStream as ETokenStream;
+use structures::Term;
 
 mod decl;
 mod expr;
