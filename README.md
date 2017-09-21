@@ -8,7 +8,7 @@ You will need `cargo` and `rustc` installed. You can get them [here](https://www
 
 ## Tests
 
-`cargo test` will run all unit tests and also test the examples in this file.
+`cargo test` will run all tests. `cargo test --test skeptic` will only test the examples in this file.
 
 ## Usage
 
@@ -25,22 +25,18 @@ Within the REPL, you can declare a new type or enter an expression to evaluate. 
 
 For now, integers are the only supported numeric type. Built-in arithmetic operations can be used with Scheme-style prefix notation:
 
-```
-assert_eq!(5, 55);
-
-/*
-> * (// 18 3) (- (+ 4 5) (% 6 4))
+```rust,skt-repl
++ 5 5
+10
+* (// 18 3) (- (+ 4 5) (% 6 4))
 42
-*/
 ```
 
 ### Conditionals
 
-```
-/*
-> if (> 100 0) then True else False
+```rust,skt-repl
+if (> 100 0) then True else False
 True
-*/
 ```
 
 ### Functions
@@ -48,14 +44,12 @@ True
 Functions are expressed as lambdas. All functions are curried and take exactly one argument.
 
 ```
-/*
-> (\x -> * x x) 5
+(\x -> * x x) 5
 25
-> (\x -> \y -> - x y) 5
+(\x -> \y -> - x y) 5
 \y -> (- 5 y)
-> (\x -> \y -> - x y) 5 10
+(\x -> \y -> - x y) 5 10
 -5
-*/
 ```
 
 A value bound as the argument of a lambda must have the same concrete type throughout the body of the expression. For instance the identity function can be applied to an `Int` or a `Bool`, but not both:
@@ -75,29 +69,23 @@ Type error: Bool != Int
 
 Can be used to define a variable within the body of a particular expression.
 
-```
-/*
-> let x = 10 in < x 5
+```rust,skt-repl
+let x = 10 in < x 5
 False
-*/
 ```
 
 This is the only way to define a recursive function at present:
 
-```
-/*
-> let fact = (\x -> (if (< x 1) then 1 else * x (fact (- x 1)))) in fact 8
+```rust,skt-repl
+let fact = (\x -> (if (< x 1) then 1 else * x (fact (- x 1)))) in fact 8
 40320
-*/
 ```
 
 A value bound in a `let` expression can be used polymorphically within the body of the expression. Here the identity function is applied to both an `Int` and a `Bool`:
 
-```
-/*
-> let id = (\x -> x) in (if id True then id 5 else id 0)
+```rust,skt-repl
+let id = (\x -> x) in (if id True then id 5 else id 0)
 5
-*/
 ```
 
 A let expression without a body will continue the binding for the rest of the REPL session:
