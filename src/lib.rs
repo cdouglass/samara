@@ -1,3 +1,5 @@
+pub mod ui;
+
 mod lex;
 use self::lex::build_lexer;
 use self::lex::build_lexer_decl;
