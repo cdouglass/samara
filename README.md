@@ -88,35 +88,31 @@ A value bound in a `let` expression can be used polymorphically within the body 
 
 A let expression without a body will continue the binding for the rest of the REPL session:
 
-```
-/*
+```rust,skt-repl
 > let id = \x -> x
 > if id True then id 5 else id 0
 5
 > let fact = (\x -> (if (< x 1) then 1 else * x (fact (- x 1))))
 > fact 8
 40320
-*/
 ```
 
 ### Algebraic data types (aka union types)
 
 You can define sum and product types in the REPL, and use values of these types via pattern matching. I haven't implemented proper exhaustiveness checking yet, so case expressions must start with a default value immediately following the `of`.
 
-```
-/*
+```rust,skt-repl
 > type Maybe a = Just a | Nothing
 > let foo = \x -> case x of 100; Just Nothing -> 5; Just (Just y) -> (* y y);
 > foo Nothing
 100
-> foo Just Nothing
+> foo (Just Nothing)
 5
 > foo (Just (Just 8))
 64
 > type Pair a b = Pair a b
 > case (Pair 7 6) of 5; Pair y z -> - y z
 1
-*/
 ```
 
 Recursive types, eg `List a = Nil | Cons a (List a)` are not yet supported.
@@ -125,13 +121,11 @@ Recursive types, eg `List a = Nil | Cons a (List a)` are not yet supported.
 
 Whitespace does not affect evaluation. End a line with `\` to continue the expression on the next line.
 
-```
-/*
+```rust,skt-repl
 > if (> 100 0) \
 | then True \
 | else False
 True
-*/
 ```
 
 ## Upcoming features
