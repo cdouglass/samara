@@ -37,7 +37,7 @@ pub fn type_of(expr: &str, bindings: &[LetBinding], mut gen: &mut GenTypeVar, su
     }
 }
 
-pub fn declare_sum_type(decl: &str, mut sum_types: &mut SumTypeDefs) -> Result<SumType, String> {
+pub fn declare_sum_type(decl: &str, sum_types: &mut SumTypeDefs) -> Result<SumType, String> {
     match build_lexer_decl(decl) {
         TokenStream::Decl(mut tokens) => {
             let sum_type = parse_decl(&mut tokens, sum_types)?;
@@ -56,7 +56,7 @@ fn parse_from_str(expr: &str, bindings: &[LetBinding], sum_types: &SumTypeDefs) 
     }
 }
 
-pub fn evaluate(expr: &str, mut session_bindings: &mut Vec<LetBinding>, mut gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<Term, String> {
+pub fn evaluate(expr: &str, session_bindings: &mut Vec<LetBinding>, gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<Term, String> {
     match type_of(expr, session_bindings, gen, sum_types) {
         (Err(msg), _) | (_, Err(msg)) => Err(msg),
         (Ok(ast), Ok(typ)) => {

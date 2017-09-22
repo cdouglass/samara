@@ -28,7 +28,7 @@ fn main() {
 
         let stdin = io::stdin();
         let stdout = io::stdout();
-        let mut inputs = Inputs::new_io(stdin.lock(), stdout.lock(), ":", "| ", "\\", "").peekable();
+        let mut inputs = Inputs::new_io(stdin.lock(), stdout.lock(), ":", "| ", "\\", "");
 
         match inputs.next().unwrap() {
             UiCmd::Command(cmd, arg) => {
@@ -37,7 +37,7 @@ fn main() {
                 } else if &cmd == "help" {
                     println!("{}", USAGE)
                 } else if &cmd == "type" {
-                    let expr = &arg.unwrap_or(String::new());
+                    let expr = arg.unwrap_or_default();
                     let result = type_of(&expr, &bindings, &mut gen_type_var, &sum_type_defs);
                     match result {
                         (Ok(term), Ok(typ)) => println!("{:?} : {:?}", term, typ),

@@ -131,7 +131,7 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
     }
 }
 
-fn parse_conditional(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
+fn parse_conditional(tokens: &mut Peekable<TokenStream>, token_stack: &mut Vec<Token>, identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
     token_stack.push(Token::Keyword(Then));
     let predicate = parse(tokens, token_stack, identifier_stack, sum_types);
 
@@ -166,7 +166,7 @@ fn parse_let(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
     }
 }
 
-fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
+fn parse_case(tokens: &mut Peekable<TokenStream>, token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
     token_stack.push(Token::Keyword(Of));
     let arg = parse(tokens, token_stack, identifier_stack, sum_types)?;
 
@@ -204,7 +204,7 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
     Ok(Term::Case(Box::new(arg), cases, Box::new(default)))
 }
 
-fn parse_pattern(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, sum_types: &SumTypeDefs) -> Result<Pattern, String> {
+fn parse_pattern(tokens: &mut Peekable<TokenStream>, token_stack: &mut Vec<Token>, sum_types: &SumTypeDefs) -> Result<Pattern, String> {
     match tokens.next() {
         Some(Token::Open) => {
             token_stack.push(Token::Open);

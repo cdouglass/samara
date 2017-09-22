@@ -63,7 +63,7 @@ pub fn apply_substitution(substitution: &HashMap<usize, Type>, typ: &mut Type) {
 }
 
 // optionally instantiate a whole vector of other types with the same substitution
-fn instantiate(typ: &mut Type, types: &mut Vec<Type>, universals: &HashSet<usize>, mut gen: &mut GenTypeVar) {
+fn instantiate(typ: &mut Type, types: &mut Vec<Type>, universals: &HashSet<usize>, gen: &mut GenTypeVar) {
     let mut sub = HashMap::new();
     let mut sorted : Vec<usize> = universals.iter().cloned().collect(); // for determinism in tests
     sorted.sort();
@@ -74,7 +74,7 @@ fn instantiate(typ: &mut Type, types: &mut Vec<Type>, universals: &HashSet<usize
     for x in types.iter_mut() { apply_substitution(&sub, x); }
 }
 
-fn get_constraints(term: Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar, constructor_bindings: &[(ConstructorBinding, HashSet<usize>)]) -> Result<(Type, Vec<(Type, Type)>), String> {
+fn get_constraints(term: Term, mut context: &mut Vec<(Type, HashSet<usize>)>, gen: &mut GenTypeVar, constructor_bindings: &[(ConstructorBinding, HashSet<usize>)]) -> Result<(Type, Vec<(Type, Type)>), String> {
     match term {
         Term::Atom(ref atom) => Ok((base_type(atom), vec![])),
         Term::App(left, right) => {
@@ -246,7 +246,7 @@ fn unify(mut constraints: Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, Str
 }
 
 //(types of bound vars, type of whole pattern, constraints introduced)
-fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(ConstructorBinding, HashSet<usize>)], mut gen: &mut GenTypeVar) -> (Vec<Type>, Type, Vec<(Type, Type)>) {
+fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(ConstructorBinding, HashSet<usize>)], gen: &mut GenTypeVar) -> (Vec<Type>, Type, Vec<(Type, Type)>) {
     match *pattern {
         Pattern::Atom(ref atom) => {
             let typ = base_type(atom);
@@ -292,7 +292,7 @@ fn occurs_in(n: usize, t: &Type) -> bool {
     }
 }
 
-fn insert_sub(mut sub: &mut HashMap<usize, Type>, key: usize, mut value: Type) {
+fn insert_sub(sub: &mut HashMap<usize, Type>, key: usize, mut value: Type) {
     apply_substitution(sub, &mut value);
     sub.insert(key, value);
 }

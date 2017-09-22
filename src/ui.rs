@@ -76,7 +76,7 @@ impl<'a> Iterator for Inputs<'a> {
         if let Some(line) = self.lines.next() {
             if let Some(ref expr) = strip_prefix(&line, &format!("{}type", self.prompt)) {
                 Some(Command::Decl(expr.to_string()))
-            } else if let Some(expr) = print_or_strip_prefix(&line, self.prompt, &mut self.out) {
+            } else if let Some(expr) = strip_prefix(&line, self.prompt) {
                 if let Some(cmd) = strip_prefix(&expr, self.cmd_marker) {
                     let mut split = cmd.splitn(2, ' ').map(|x| x.to_string());
                     return Some(Command::Command(split.next().unwrap(), split.next()));
@@ -86,16 +86,22 @@ impl<'a> Iterator for Inputs<'a> {
                 loop {
                     if let Some(p) = strip_suffix(&e, self.continue_line) {
                         partial += p;
+                        if let Some(ref mut out) = self.out {
+                            out.write_all(self.continue_prompt.as_bytes()).unwrap();
+                            out.flush().unwrap();
+                        }
                     } else {
                         partial += &e;
                         break;
                     }
-                    match self.lines.peek().cloned().and_then(|x| print_or_strip_prefix(&x, self.continue_prompt, &mut self.out)) {
-                        Some(n) => {
-                            e = n.clone();
-                            self.lines.next();
+                    match (self.lines.next(), &self.out) {
+                        (Some(n), &Some(_)) => {
+                            e = n;
                         },
-                        None => { break; }
+                        (Some(n), &None) => {
+                            e = strip_prefix(&n, self.continue_prompt).unwrap();
+                        },
+                        (None, _) => { break; }
                     }
                 }
                 Some(Command::Eval(partial))
@@ -122,16 +128,5 @@ fn strip_prefix(s: &str, p: &str) -> Option<String> {
         Some(s[p.len()..].to_string())
     } else {
         None
-    }
-}
-
-fn print_or_strip_prefix(s: &str, p: &str, handle: &mut Option<StdoutLock>) -> Option<String> {
-    match *handle {
-        Some(ref mut out) => {
-            out.write(p.as_bytes()).unwrap();
-            out.flush().unwrap();
-            None
-        },
-        None => strip_prefix(s, p)
     }
 }

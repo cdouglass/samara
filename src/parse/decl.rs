@@ -10,7 +10,7 @@ use structures::Type;
 use structures::sums::SumType;
 use structures::sums::SumTypeDefs;
 
-pub fn parse(mut tokens: &mut Peekable<TokenStream>, sum_types: &SumTypeDefs) -> Result<SumType, String> {
+pub fn parse(tokens: &mut Peekable<TokenStream>, sum_types: &SumTypeDefs) -> Result<SumType, String> {
     let name = get_sum(tokens, "Type declaration must begin with an uppercase name")?;
     let mut type_vars = HashMap::new();
     let mut variants = vec![];
@@ -42,7 +42,7 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, sum_types: &SumTypeDefs) ->
     Ok(SumType::new(&name, variants, params))
 }
 
-fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<(String, Vec<Type>), String> {
+fn parse_variant(tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<(String, Vec<Type>), String> {
     let name = get_sum(tokens, "Missing constructor in right-hand side of type declaration")?;
     let mut token_stack = vec![];
     let mut arg_types = vec![];
@@ -68,7 +68,7 @@ fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, 
     Ok((String::from(name), arg_types))
 }
 
-fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<Type, String> {
+fn parse_type(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<Type, String> {
     let mut typ : Type;
 
     match tokens.next() {
@@ -147,7 +147,7 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
     Ok(typ)
 }
 
-fn get_sum(mut tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, String> {
+fn get_sum(tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, String> {
     match tokens.next() {
         Some(Token::Sum(s)) => Ok(s),
         _ => Err(String::from(msg))
