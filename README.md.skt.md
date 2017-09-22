@@ -14,12 +14,12 @@ fn main() {{
     let mut sum_types = SumTypeDefs::new();
     let mut gen = GenTypeVar::new();
     let mut session_bindings = vec![];
-    let mut inputs = Inputs::new(r"{}").peekable();
+    let mut inputs = Inputs::new_str(r"{}").peekable();
 
     loop {{
         match inputs.next() {{
             Some(Command::Decl(typ)) => {{
-                declare_sum_type(typ, &mut gen, &mut sum_types).unwrap();
+                declare_sum_type(&typ, &mut gen, &mut sum_types).unwrap();
             }},
             Some(Command::Eval(expr)) => {{
                 let mut eval = |x: String| {{
@@ -39,6 +39,7 @@ fn main() {{
                 }}
             }},
             Some(Command::Expected(_)) => panic!(),
+            Some(Command::Command(_, _)) => panic!(),
             None => {{ break; }}
         }}
     }}
