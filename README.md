@@ -43,7 +43,7 @@ True
 
 Functions are expressed as lambdas. All functions are curried and take exactly one argument.
 
-```
+```rust,skt-repl
 > (\x -> * x x) 5
 25
 > (\x -> \y -> - x y) 5
@@ -54,15 +54,13 @@ Functions are expressed as lambdas. All functions are curried and take exactly o
 
 A value bound as the argument of a lambda must have the same concrete type throughout the body of the expression. For instance the identity function can be applied to an `Int` or a `Bool`, but not both:
 
-```
-/*
+```rust,skt-repl
 > (\f -> f 5) (\x -> x)
 5
 > (\f -> f True) (\x -> x)
 True
 > (\f -> (if f True then f 5 else f 0)) (\x -> x)
 Type error: Bool != Int
-*/
 ```
 
 ### Let expressions

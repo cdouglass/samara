@@ -72,7 +72,13 @@ fn main() {{
     loop {{
         if let Some(Command::Eval(expr)) = inputs.next() {{
             if let Some(Command::Expected(expected)) = inputs.peek().cloned() {{
-                assert_eq!(eval(expected), eval(expr))
+                inputs.next();
+                match eval(expr) {{
+                    Err(err) => {{
+                        assert_eq!(err, expected);
+                    }},
+                    t => assert_eq!(t, eval(expected))
+                }}
             }} else {{
                 eval(expr).unwrap();
             }}
