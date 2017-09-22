@@ -393,11 +393,10 @@ mod tests {
     #[test]
     fn test_parses_case() {
         use declare_sum_type;
-        use infer::GenTypeVar;
         use structures::patterns::Pattern;
 
         let mut sum_types = SumTypeDefs::new();
-        declare_sum_type("Maybe a = Just a | None", &mut GenTypeVar::new(), &mut sum_types).unwrap();
+        declare_sum_type("Maybe a = Just a | None", &mut sum_types).unwrap();
         let mut tokens = match build_lexer("case Just 10 of 5; Just 0 -> 42; Just x -> x; None -> 100; _ -> 777"){
             TS::Expr(ts) => ts,
             _ => panic!()

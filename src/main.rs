@@ -48,7 +48,7 @@ fn main() {
                 }
             }
             UiCmd::Decl(expr) => {
-                let new_sum_type = declare_sum_type(&expr, &mut gen_type_var, &mut sum_type_defs);
+                let new_sum_type = declare_sum_type(&expr, &mut sum_type_defs);
                 match new_sum_type {
                     Ok(sum) => println!("{:?}", sum),
                     Err(msg) => println!("{:?}", msg)

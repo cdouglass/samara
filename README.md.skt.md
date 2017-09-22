@@ -19,7 +19,7 @@ fn main() {{
     loop {{
         match inputs.next() {{
             Some(Command::Decl(typ)) => {{
-                declare_sum_type(&typ, &mut gen, &mut sum_types).unwrap();
+                declare_sum_type(&typ, &mut sum_types).unwrap();
             }},
             Some(Command::Eval(expr)) => {{
                 let mut eval = |x: String| {{

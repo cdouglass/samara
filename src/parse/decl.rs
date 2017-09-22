@@ -10,11 +10,12 @@ use structures::Type;
 use structures::sums::SumType;
 use structures::sums::SumTypeDefs;
 
-pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<SumType, String> {
+pub fn parse(mut tokens: &mut Peekable<TokenStream>, sum_types: &SumTypeDefs) -> Result<SumType, String> {
     let name = get_sum(tokens, "Type declaration must begin with an uppercase name")?;
     let mut type_vars = HashMap::new();
     let mut variants = vec![];
     let mut params = vec![];
+    let mut gen = GenTypeVar::new();
 
     loop {
         match tokens.next() {
@@ -159,7 +160,6 @@ mod tests {
     use structures::arrow;
     use structures::Type::TypeVar;
     use structures::sums::SumType;
-    use infer::GenTypeVar;
     use lex::decl::build_lexer;
 
     /* Test parse_type */
@@ -280,7 +280,7 @@ mod tests {
 
     fn assert_parse_err(decl: &str, msg: &str) {
         let mut tokens = build_lexer(decl);
-        match parse(&mut tokens, &mut GenTypeVar::new(), &SumTypeDefs::new()) {
+        match parse(&mut tokens, &SumTypeDefs::new()) {
             Ok(_) => {
                 panic!("Expected error {} but got success", msg)
             },
@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn test_parses_type_name() {
         let mut tokens = build_lexer("Tree a = Empty | Foo a");
-        let sum_type = parse(&mut tokens, &mut GenTypeVar::new(), &SumTypeDefs::new()).unwrap();
+        let sum_type = parse(&mut tokens, &SumTypeDefs::new()).unwrap();
         assert_eq!(&sum_type.name, "Tree");
     }
 
@@ -311,15 +311,13 @@ mod tests {
 
     #[test]
     fn test_parses_type_vars() {
-        let mut gen = GenTypeVar::new();
-
         let mut tokens = build_lexer("Foo a b c = Bar");
-        let sum_type = parse(&mut tokens, &mut gen, &SumTypeDefs::new()).unwrap();
+        let sum_type = parse(&mut tokens, &SumTypeDefs::new()).unwrap();
         assert_eq!(sum_type.params, vec![TypeVar(1), TypeVar(2), TypeVar(3)]);
 
         let mut tokens = build_lexer("Baz a b = Quux");
-        let sum_type = parse(&mut tokens, &mut gen, &SumTypeDefs::new()).unwrap();
-        assert_eq!(sum_type.params, vec![TypeVar(4), TypeVar(5)]);
+        let sum_type = parse(&mut tokens, &SumTypeDefs::new()).unwrap();
+        assert_eq!(sum_type.params, vec![TypeVar(1), TypeVar(2)]);
     }
 }
 

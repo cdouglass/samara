@@ -662,7 +662,7 @@ mod tests {
             use declare_sum_type;
             let mut gen = GenTypeVar::new();
             let mut sum_types = SumTypeDefs::new();
-            declare_sum_type("Pair = Pair Int Bool", &mut gen, &mut sum_types).unwrap();
+            declare_sum_type("Pair = Pair Int Bool", &mut sum_types).unwrap();
             let term = Term::Sum(0, String::from("Pair"), vec![FIVE, FIVE]);
             let expected = "Type error: Int != Bool";
             assert_type_err_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
