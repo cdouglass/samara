@@ -77,7 +77,7 @@ fn main() {{
                     Err(err) => {{
                         assert_eq!(err, expected);
                     }},
-                    t => assert_eq!(t, eval(expected))
+                    Ok(t) => assert_eq!(format!("{{:?}}", t), expected)
                 }}
             }} else {{
                 eval(expr).unwrap();
