@@ -26,16 +26,16 @@ Within the REPL, you can declare a new type or enter an expression to evaluate. 
 For now, integers are the only supported numeric type. Built-in arithmetic operations can be used with Scheme-style prefix notation:
 
 ```rust,skt-repl
-+ 5 5
+> + 5 5
 10
-* (// 18 3) (- (+ 4 5) (% 6 4))
+> * (// 18 3) (- (+ 4 5) (% 6 4))
 42
 ```
 
 ### Conditionals
 
 ```rust,skt-repl
-if (> 100 0) then True else False
+> if (> 100 0) then True else False
 True
 ```
 
@@ -44,11 +44,11 @@ True
 Functions are expressed as lambdas. All functions are curried and take exactly one argument.
 
 ```
-(\x -> * x x) 5
+> (\x -> * x x) 5
 25
-(\x -> \y -> - x y) 5
+> (\x -> \y -> - x y) 5
 \y -> (- 5 y)
-(\x -> \y -> - x y) 5 10
+> (\x -> \y -> - x y) 5 10
 -5
 ```
 
@@ -70,21 +70,21 @@ Type error: Bool != Int
 Can be used to define a variable within the body of a particular expression.
 
 ```rust,skt-repl
-let x = 10 in < x 5
+> let x = 10 in < x 5
 False
 ```
 
 This is the only way to define a recursive function at present:
 
 ```rust,skt-repl
-let fact = (\x -> (if (< x 1) then 1 else * x (fact (- x 1)))) in fact 8
+> let fact = (\x -> (if (< x 1) then 1 else * x (fact (- x 1)))) in fact 8
 40320
 ```
 
 A value bound in a `let` expression can be used polymorphically within the body of the expression. Here the identity function is applied to both an `Int` and a `Bool`:
 
 ```rust,skt-repl
-let id = (\x -> x) in (if id True then id 5 else id 0)
+> let id = (\x -> x) in (if id True then id 5 else id 0)
 5
 ```
 

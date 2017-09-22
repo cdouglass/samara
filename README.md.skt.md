@@ -7,41 +7,54 @@ use samara::SumTypeDefs;
 use samara::infer::GenTypeVar;
 
 use std::iter::Iterator;
-use std::str::Split;
+use std::iter::Peekable;
+use std::str::Lines;
 
 /*
 const CMD_MARKER : char = ':';
 const CONTINUE_LINE : char = '\\';
 const CONTINUE_PROMPT : &str = "| ";
-const PROMPT : &str = "> ";
 */
+const PROMPT : &str = "> ";
 
 struct Inputs<'a> {{
-    lines: Split<'a, &'static str>
+    lines: Peekable<Lines<'a>>
 }}
 
 impl<'a> Inputs<'a> {{
     pub fn new(s: &str) -> Inputs {{
-        Inputs{{lines: s.split("\n")}}
+        Inputs{{lines: s.lines().peekable()}}
     }}
 }}
 
+#[derive(Clone)]
 enum Command<'a> {{
-    Eval(&'a str)
+    Eval(&'a str),
+    Expected(&'a str)
 }}
 
 //TODO don't duplicate logic from main (reuse this there???)
 impl<'a> Iterator for Inputs<'a> {{
-// TODO this will change
     type Item = Command<'a>;
     fn next(&mut self) -> Option<Command<'a>> {{
         match self.lines.next() {{
             None => None,
             Some(line) => {{
-                 let cmd = Command::Eval(line);
-                 return Some(cmd);
+                if let Some(expr) = strip_prefix(line, PROMPT) {{
+                    return Some(Command::Eval(expr));
+                }} else {{
+                    return Some(Command::Expected(line));
+                }}
             }}
         }}
+    }}
+}}
+
+fn strip_prefix<'a>(s: &'a str, p: &str) -> Option<&'a str> {{
+    if s.starts_with(p) {{
+        Some(&s[p.len()..])
+    }} else {{
+        None
     }}
 }}
 
@@ -49,18 +62,20 @@ fn main() {{
     let mut sum_types = SumTypeDefs::new();
     let mut gen = GenTypeVar::new();
     let mut session_bindings = vec![];
-    let mut inputs = Inputs::new(r"{}");
+    let mut inputs = Inputs::new(r"{}").peekable();
 
     // mutable because refers to things that will mutate
     let mut eval = |x| {{
-        match x {{
-            Command::Eval(s) => evaluate(&s, &mut session_bindings, &mut gen, &sum_types)
-        }}
+        evaluate(x, &mut session_bindings, &mut gen, &sum_types)
     }};
 
     loop {{
-        if let (Some(x), Some(y)) = (inputs.next(), inputs.next()) {{
-            assert_eq!(eval(x), eval(y))
+        if let Some(Command::Eval(expr)) = inputs.next() {{
+            if let Some(Command::Expected(expected)) = inputs.peek().cloned() {{
+                assert_eq!(eval(expected), eval(expr))
+            }} else {{
+                eval(expr).unwrap();
+            }}
         }} else {{
             break;
         }}
