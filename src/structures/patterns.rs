@@ -1,5 +1,5 @@
-use interpret::structures::Atom;
-use interpret::structures::Term;
+use structures::Atom;
+use structures::Term;
 
 #[derive(Debug)]
 #[derive(Clone)]
@@ -56,9 +56,9 @@ impl Pattern {
 mod tests {
     use super::*;
     use self::Pattern::*;
-    use interpret::structures::Atom;
-    use interpret::structures::Op;
-    use interpret::structures::Term;
+    use structures::Atom;
+    use structures::Op;
+    use structures::Term;
 
     const JUST : usize = 0;
     const NONE : usize = 1;

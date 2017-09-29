@@ -2,15 +2,15 @@ use std::iter::Iterator;
 use std::iter::Peekable;
 use std::str::FromStr;
 
-use interpret::lex::expr::TokenStream;
-use interpret::lex::expr::Token;
-use interpret::lex::expr::Keyword::*;
+use lex::expr::TokenStream;
+use lex::expr::Token;
+use lex::expr::Keyword::*;
 
-use interpret::SumTypeDefs;
-use interpret::structures::Atom;
-use interpret::structures::Op;
-use interpret::structures::Term;
-use interpret::structures::patterns::Pattern;
+use SumTypeDefs;
+use structures::Atom;
+use structures::Op;
+use structures::Term;
+use structures::patterns::Pattern;
 
 pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
     let close_err = Err(String::from("Unexpected CLOSE delimiter"));
@@ -131,7 +131,7 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
     }
 }
 
-fn parse_conditional(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
+fn parse_conditional(tokens: &mut Peekable<TokenStream>, token_stack: &mut Vec<Token>, identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
     token_stack.push(Token::Keyword(Then));
     let predicate = parse(tokens, token_stack, identifier_stack, sum_types);
 
@@ -166,7 +166,7 @@ fn parse_let(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
     }
 }
 
-fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
+fn parse_case(tokens: &mut Peekable<TokenStream>, token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
     token_stack.push(Token::Keyword(Of));
     let arg = parse(tokens, token_stack, identifier_stack, sum_types)?;
 
@@ -204,7 +204,7 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Toke
     Ok(Term::Case(Box::new(arg), cases, Box::new(default)))
 }
 
-fn parse_pattern(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, sum_types: &SumTypeDefs) -> Result<Pattern, String> {
+fn parse_pattern(tokens: &mut Peekable<TokenStream>, token_stack: &mut Vec<Token>, sum_types: &SumTypeDefs) -> Result<Pattern, String> {
     match tokens.next() {
         Some(Token::Open) => {
             token_stack.push(Token::Open);
@@ -282,12 +282,12 @@ fn identify_constructor(s: &str, sum_types: &SumTypeDefs) -> Result<usize, Strin
 #[cfg(test)]
 mod tests {
     use super::parse;
-    use interpret::SumTypeDefs;
-    use interpret::lex::build_lexer;
-    use interpret::lex::TokenStream as TS;
-    use interpret::structures::Atom;
-    use interpret::structures::Term;
-    use interpret::structures::Type;
+    use SumTypeDefs;
+    use lex::build_lexer;
+    use lex::TokenStream as TS;
+    use structures::Atom;
+    use structures::Term;
+    use structures::Type;
 
     fn assert_parse(expr: &str, expected: &Term) {
         let mut token_stack = vec![];
@@ -392,12 +392,11 @@ mod tests {
 
     #[test]
     fn test_parses_case() {
-        use interpret::declare_sum_type;
-        use interpret::infer::GenTypeVar;
-        use interpret::structures::patterns::Pattern;
+        use declare_sum_type;
+        use structures::patterns::Pattern;
 
         let mut sum_types = SumTypeDefs::new();
-        declare_sum_type("Maybe a = Just a | None", &mut GenTypeVar::new(), &mut sum_types).unwrap();
+        declare_sum_type("Maybe a = Just a | None", &mut sum_types).unwrap();
         let mut tokens = match build_lexer("case Just 10 of 5; Just 0 -> 42; Just x -> x; None -> 100; _ -> 777"){
             TS::Expr(ts) => ts,
             _ => panic!()

@@ -3,8 +3,8 @@ use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use interpret::structures::Term;
-use interpret::structures::Type;
+use structures::Term;
+use structures::Type;
 
 #[derive(Debug)]
 #[derive(Clone)]
@@ -100,7 +100,7 @@ impl Debug for SumType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use interpret::structures::Type::*;
+    use structures::Type::*;
 
     /* Helpers */
     fn maybe() -> Vec<(String, Vec<Type>)> {

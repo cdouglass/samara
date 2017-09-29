@@ -2,16 +2,16 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::iter::Iterator;
 
-use interpret::SumTypeDefs;
-use interpret::structures::arrow;
-use interpret::structures::Atom;
-use interpret::structures::LetBinding;
-use interpret::structures::Op;
-use interpret::structures::Term;
-use interpret::structures::Type;
-use interpret::structures::Type::*;
-use interpret::structures::patterns::Pattern;
-use interpret::structures::sums::ConstructorBinding;
+use SumTypeDefs;
+use structures::arrow;
+use structures::Atom;
+use structures::LetBinding;
+use structures::Op;
+use structures::Term;
+use structures::Type;
+use structures::Type::*;
+use structures::patterns::Pattern;
+use structures::sums::ConstructorBinding;
 
 pub fn infer_type(term: &Term, bindings: &[LetBinding], mut gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<Type, String> {
     let mut context = vec![];
@@ -63,7 +63,7 @@ pub fn apply_substitution(substitution: &HashMap<usize, Type>, typ: &mut Type) {
 }
 
 // optionally instantiate a whole vector of other types with the same substitution
-fn instantiate(typ: &mut Type, types: &mut Vec<Type>, universals: &HashSet<usize>, mut gen: &mut GenTypeVar) {
+fn instantiate(typ: &mut Type, types: &mut Vec<Type>, universals: &HashSet<usize>, gen: &mut GenTypeVar) {
     let mut sub = HashMap::new();
     let mut sorted : Vec<usize> = universals.iter().cloned().collect(); // for determinism in tests
     sorted.sort();
@@ -74,7 +74,7 @@ fn instantiate(typ: &mut Type, types: &mut Vec<Type>, universals: &HashSet<usize
     for x in types.iter_mut() { apply_substitution(&sub, x); }
 }
 
-fn get_constraints(term: Term, mut context: &mut Vec<(Type, HashSet<usize>)>, mut gen: &mut GenTypeVar, constructor_bindings: &[(ConstructorBinding, HashSet<usize>)]) -> Result<(Type, Vec<(Type, Type)>), String> {
+fn get_constraints(term: Term, mut context: &mut Vec<(Type, HashSet<usize>)>, gen: &mut GenTypeVar, constructor_bindings: &[(ConstructorBinding, HashSet<usize>)]) -> Result<(Type, Vec<(Type, Type)>), String> {
     match term {
         Term::Atom(ref atom) => Ok((base_type(atom), vec![])),
         Term::App(left, right) => {
@@ -246,7 +246,7 @@ fn unify(mut constraints: Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, Str
 }
 
 //(types of bound vars, type of whole pattern, constraints introduced)
-fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(ConstructorBinding, HashSet<usize>)], mut gen: &mut GenTypeVar) -> (Vec<Type>, Type, Vec<(Type, Type)>) {
+fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(ConstructorBinding, HashSet<usize>)], gen: &mut GenTypeVar) -> (Vec<Type>, Type, Vec<(Type, Type)>) {
     match *pattern {
         Pattern::Atom(ref atom) => {
             let typ = base_type(atom);
@@ -292,7 +292,7 @@ fn occurs_in(n: usize, t: &Type) -> bool {
     }
 }
 
-fn insert_sub(mut sub: &mut HashMap<usize, Type>, key: usize, mut value: Type) {
+fn insert_sub(sub: &mut HashMap<usize, Type>, key: usize, mut value: Type) {
     apply_substitution(sub, &mut value);
     sub.insert(key, value);
 }
@@ -347,9 +347,9 @@ fn base_type(atom: &Atom) -> Type {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use interpret::evaluate;
-    use interpret::SumTypeDefs;
-    use interpret::structures::sums::SumType;
+    use evaluate;
+    use SumTypeDefs;
+    use structures::sums::SumType;
     use self::LetBinding;
     use self::Op::*;
 
@@ -532,7 +532,7 @@ mod tests {
 
     mod test_sum_types {
         use super::*;
-        use interpret::structures::patterns::Pattern;
+        use structures::patterns::Pattern;
 
         const LEFT: usize = 0;
         const RIGHT: usize = 1;
@@ -659,10 +659,10 @@ mod tests {
 
         #[test]
         fn test_sum_from_binary_constructor() {
-            use interpret::declare_sum_type;
+            use declare_sum_type;
             let mut gen = GenTypeVar::new();
             let mut sum_types = SumTypeDefs::new();
-            declare_sum_type("Pair = Pair Int Bool", &mut gen, &mut sum_types).unwrap();
+            declare_sum_type("Pair = Pair Int Bool", &mut sum_types).unwrap();
             let term = Term::Sum(0, String::from("Pair"), vec![FIVE, FIVE]);
             let expected = "Type error: Int != Bool";
             assert_type_err_with_context(&term, &expected, &vec![], &mut gen, &sum_types);

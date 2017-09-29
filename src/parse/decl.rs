@@ -2,19 +2,20 @@ use std::collections::HashMap;
 use std::iter::Iterator;
 use std::iter::Peekable;
 
-use interpret::infer::GenTypeVar;
-use interpret::lex::decl::Token;
-use interpret::lex::decl::TokenStream;
-use interpret::structures::arrow;
-use interpret::structures::Type;
-use interpret::structures::sums::SumType;
-use interpret::structures::sums::SumTypeDefs;
+use infer::GenTypeVar;
+use lex::decl::Token;
+use lex::decl::TokenStream;
+use structures::arrow;
+use structures::Type;
+use structures::sums::SumType;
+use structures::sums::SumTypeDefs;
 
-pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_types: &SumTypeDefs) -> Result<SumType, String> {
+pub fn parse(tokens: &mut Peekable<TokenStream>, sum_types: &SumTypeDefs) -> Result<SumType, String> {
     let name = get_sum(tokens, "Type declaration must begin with an uppercase name")?;
     let mut type_vars = HashMap::new();
     let mut variants = vec![];
     let mut params = vec![];
+    let mut gen = GenTypeVar::new();
 
     loop {
         match tokens.next() {
@@ -41,7 +42,7 @@ pub fn parse(mut tokens: &mut Peekable<TokenStream>, gen: &mut GenTypeVar, sum_t
     Ok(SumType::new(&name, variants, params))
 }
 
-fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<(String, Vec<Type>), String> {
+fn parse_variant(tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<(String, Vec<Type>), String> {
     let name = get_sum(tokens, "Missing constructor in right-hand side of type declaration")?;
     let mut token_stack = vec![];
     let mut arg_types = vec![];
@@ -67,7 +68,7 @@ fn parse_variant(mut tokens: &mut Peekable<TokenStream>, vars: &HashMap<String, 
     Ok((String::from(name), arg_types))
 }
 
-fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<Type, String> {
+fn parse_type(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, vars: &HashMap<String, Type>, sum_types: &SumTypeDefs) -> Result<Type, String> {
     let mut typ : Type;
 
     match tokens.next() {
@@ -146,7 +147,7 @@ fn parse_type(mut tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<
     Ok(typ)
 }
 
-fn get_sum(mut tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, String> {
+fn get_sum(tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, String> {
     match tokens.next() {
         Some(Token::Sum(s)) => Ok(s),
         _ => Err(String::from(msg))
@@ -156,11 +157,10 @@ fn get_sum(mut tokens: &mut Peekable<TokenStream>, msg: &str) -> Result<String, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use interpret::structures::arrow;
-    use interpret::structures::Type::TypeVar;
-    use interpret::structures::sums::SumType;
-    use interpret::infer::GenTypeVar;
-    use interpret::lex::decl::build_lexer;
+    use structures::arrow;
+    use structures::Type::TypeVar;
+    use structures::sums::SumType;
+    use lex::decl::build_lexer;
 
     /* Test parse_type */
 
@@ -280,7 +280,7 @@ mod tests {
 
     fn assert_parse_err(decl: &str, msg: &str) {
         let mut tokens = build_lexer(decl);
-        match parse(&mut tokens, &mut GenTypeVar::new(), &SumTypeDefs::new()) {
+        match parse(&mut tokens, &SumTypeDefs::new()) {
             Ok(_) => {
                 panic!("Expected error {} but got success", msg)
             },
@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn test_parses_type_name() {
         let mut tokens = build_lexer("Tree a = Empty | Foo a");
-        let sum_type = parse(&mut tokens, &mut GenTypeVar::new(), &SumTypeDefs::new()).unwrap();
+        let sum_type = parse(&mut tokens, &SumTypeDefs::new()).unwrap();
         assert_eq!(&sum_type.name, "Tree");
     }
 
@@ -311,15 +311,13 @@ mod tests {
 
     #[test]
     fn test_parses_type_vars() {
-        let mut gen = GenTypeVar::new();
-
         let mut tokens = build_lexer("Foo a b c = Bar");
-        let sum_type = parse(&mut tokens, &mut gen, &SumTypeDefs::new()).unwrap();
+        let sum_type = parse(&mut tokens, &SumTypeDefs::new()).unwrap();
         assert_eq!(sum_type.params, vec![TypeVar(1), TypeVar(2), TypeVar(3)]);
 
         let mut tokens = build_lexer("Baz a b = Quux");
-        let sum_type = parse(&mut tokens, &mut gen, &SumTypeDefs::new()).unwrap();
-        assert_eq!(sum_type.params, vec![TypeVar(4), TypeVar(5)]);
+        let sum_type = parse(&mut tokens, &SumTypeDefs::new()).unwrap();
+        assert_eq!(sum_type.params, vec![TypeVar(1), TypeVar(2)]);
     }
 }
 
