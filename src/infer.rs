@@ -327,6 +327,11 @@ fn type_vars_free_in(typ: &Type) -> HashSet<usize> {
             tvars.extend(type_vars_free_in(t1));
             tvars.extend(type_vars_free_in(t2));
         },
+        Sum(ref sum) => {
+            for param in &sum.params {
+                tvars.extend(type_vars_free_in(param));
+            }
+        },
         _ => { }
     }
     tvars
@@ -429,6 +434,25 @@ mod tests {
         sub1.insert(1, Int);
         insert_sub(&mut sub1, 2, TypeVar(1));
         assert_eq!(sub1.get(&2), Some(&Int));
+    }
+
+    #[test]
+    fn test_type_vars_free_in() {
+        let mut expected = HashSet::new();
+        let (t0, t1) = (TypeVar(5), TypeVar(2));
+
+        for t in vec![Type::Int, Type::Bool, Type::Unit] {
+            assert_eq!(type_vars_free_in(&t), expected);
+        }
+
+        expected.insert(2);
+        expected.insert(5);
+        let actual = type_vars_free_in(&arrow(t0.clone(), t1.clone()));
+        assert_eq!(actual, expected);
+
+        let variants = vec![(String::from("Left"), vec![t0.clone()]), (String::from("Right"), vec![t1.clone()])];
+        let actual = type_vars_free_in(&Type::Sum(SumType::new("Either", variants, vec![t0, t1])));
+        assert_eq!(actual, expected);
     }
 
     /* Test type inference */
