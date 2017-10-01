@@ -708,6 +708,22 @@ mod tests {
         }
 
         #[test]
+        // failing
+        fn test_infer_case_type_from_nested_patterns() {
+            let mut gen = GenTypeVar::new();
+            let mut sum_types = SumTypeDefs::new();
+            let _ = maybe(&mut gen, &mut sum_types);
+
+            let pat0 = Pattern::Sum(0, String::from("Just"), vec![Pattern::Wildcard]);
+            let pat1 = Pattern::Sum(0, String::from("Just"), vec![Pattern::Atom(Atom::Bool(true))]);
+            let cases = vec![(pat0, int_to_term(0)), (pat1, int_to_term(1))];
+            let term = Term::Lambda(Box::new(Term::Case(Box::new(Term::Var(0, String::from("x"))), cases, Box::new(FIVE))), String::from("x"));
+            let typ = Sum(SumType::new("Maybe", vec![(String::from("Just"), vec![Bool]), (String::from("Nothing"), vec![])], vec![Bool]));
+            let expected_type = arrow(typ, Int);
+            assert_type_with_context(&term, &expected_type, &vec![], &mut gen, &sum_types);
+        }
+
+        #[test]
         fn test_match_arm_using_bound_variable() {
             // Either Int Bool -> Int
             let mut gen = GenTypeVar::new();
