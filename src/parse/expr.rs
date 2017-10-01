@@ -172,32 +172,26 @@ fn parse_case(tokens: &mut Peekable<TokenStream>, token_stack: &mut Vec<Token>, 
 
     token_stack.push(Token::Keyword(Semicolon));
     let default = parse(tokens, token_stack, identifier_stack, sum_types)?;
-
     let mut cases = vec![];
 
     loop {
-        if let Some(&Token::Keyword(Semicolon)) = token_stack.last() {
-            break;
-        } else if tokens.peek().is_none() {
-            break;
-        }
+        if Some(&Token::Keyword(Semicolon)) == token_stack.last()
+            || tokens.peek().is_none() { break; }
+
         token_stack.push(Token::Keyword(Semicolon));
         token_stack.push(Token::Keyword(Arrow));
 
         let pattern = parse_pattern(tokens, token_stack, sum_types)?;
-        let vars = pattern.identifiers();
-        for v in &vars {
-            identifier_stack.push((*v).clone())
-        }
+        for var in &pattern.identifiers() { identifier_stack.push((*var).clone()); }
 
-        consume(&Token::Keyword(Arrow), tokens)?;
+        let tok = tokens.next();
+        if tok != Some(Token::Keyword(Arrow)) {
+            return Err(format!("Expecting {:?} but instead got {:?}", Token::Keyword(Arrow), tok));
+        }
         token_stack.pop();
 
         let arm = parse(tokens, token_stack, &mut identifier_stack, sum_types)?;
-        for _ in vars {
-            identifier_stack.pop();
-        }
-
+        for _ in pattern.identifiers() { identifier_stack.pop(); }
         cases.push((pattern, arm));
     }
 
@@ -208,8 +202,7 @@ fn parse_pattern(tokens: &mut Peekable<TokenStream>, token_stack: &mut Vec<Token
     match tokens.next() {
         Some(Token::Open) => {
             token_stack.push(Token::Open);
-            let pat = parse_pattern(tokens, token_stack, sum_types)?;
-            Ok(pat)
+            parse_pattern(tokens, token_stack, sum_types)
         },
         Some(Token::Unit) => Ok(Pattern::Atom(Atom::Unit)),
         Some(Token::Number(ref s)) => parse_int(s).map(Pattern::Atom),
@@ -224,39 +217,20 @@ fn parse_pattern(tokens: &mut Peekable<TokenStream>, token_stack: &mut Vec<Token
         Some(Token::Constructor(s)) => {
             let k = identify_constructor(&s, sum_types)?;
             let mut patterns = vec![];
-            loop {
-                match tokens.peek() {
-                    Some(&Token::Keyword(Arrow)) => { break; },
-                    Some(&Token::Close) => {
-                        if token_stack.pop() == Some(Token::Open) {
-                            tokens.next();
-                            break;
-                        } else {
-                            return Err(format!("Unexpected token {:?} in pattern", Token::Close));
-                        }
-                    },
-                    _ => { }
+            while tokens.peek() != Some(&Token::Keyword(Arrow)) {
+                if tokens.peek() == Some(&Token::Close) {
+                    if token_stack.pop() == Some(Token::Open) {
+                        tokens.next();
+                        break;
+                    } else {
+                        return Err(format!("Unexpected token {:?} in pattern", Token::Close));
+                    }
                 }
-                let pat = parse_pattern(tokens, token_stack, sum_types)?;
-                patterns.push(pat);
+                patterns.push(parse_pattern(tokens, token_stack, sum_types)?);
             }
             Ok(Pattern::Sum(k, s, patterns))
         },
         Some(t) => Err(format!("Unexpected token {:?} in pattern", t)),
-        None => Err(String::from("Unexpected end of input"))
-    }
-}
-
-//TODO use this elsewhere
-fn consume(tok: &Token, tokens: &mut Peekable<TokenStream>) -> Result<(), String> {
-    match tokens.next() {
-        Some(t) => {
-            if t == *tok {
-                Ok(())
-            } else {
-                Err(format!("Expecting {:?} but instead got {:?}", tok, t))
-            }
-        },
         None => Err(String::from("Unexpected end of input"))
     }
 }
@@ -281,44 +255,40 @@ fn identify_constructor(s: &str, sum_types: &SumTypeDefs) -> Result<usize, Strin
 
 #[cfg(test)]
 mod tests {
+    use std::iter::Peekable;
+
     use super::parse;
     use SumTypeDefs;
-    use lex::build_lexer;
-    use lex::TokenStream as TS;
+    use lex::expr::TokenStream;
     use structures::Atom;
     use structures::Term;
     use structures::Type;
 
-    fn assert_parse(expr: &str, expected: &Term) {
-        let mut token_stack = vec![];
-        let mut ids = vec![];
-        let sum_types = SumTypeDefs::new();
-        let mut tokens = match build_lexer(expr) {
+    fn get_tokens(expr: &str) -> Peekable<TokenStream> {
+        use lex::build_lexer;
+        use lex::TokenStream as TS;
+        match build_lexer(expr) {
             TS::Expr(ts) => ts,
             _ => panic!()
-        };
-        match parse(&mut tokens, &mut token_stack, &mut ids, &sum_types) {
+        }
+    }
+
+    fn assert_parse(expr: &str, expected: &Term) {
+        let mut tokens = get_tokens(expr);
+        match parse(&mut tokens, &mut vec![], &mut vec![], &SumTypeDefs::new()) {
             Err(msg) => {
-                println!("Expected term {:?} but got error {}", expected, msg);
-                panic!()
+                panic!("Expected term {:?} but got error {}", expected, msg);
             },
             Ok(term) => assert_eq!(term, *expected)
         }
     }
 
     fn assert_parse_err(expr: &str, msg: &str) {
-        let mut token_stack = vec![];
-        let mut ids = vec![];
-        let sum_types = SumTypeDefs::new();
-        let mut tokens = match build_lexer(expr) {
-            TS::Expr(ts) => ts,
-            _ => panic!()
-        };
-        match parse(&mut tokens, &mut token_stack, &mut ids, &sum_types) {
+        let mut tokens = get_tokens(expr);
+        match parse(&mut tokens, &mut vec![], &mut vec![], &SumTypeDefs::new()) {
             Err(m) => assert_eq!(m, msg),
             Ok(term) => {
-                println!("Expected parse error {} but got success {:?}", msg, term);
-                panic!()
+                panic!("Expected parse error {} but got success {:?}", msg, term);
             }
         }
     }
@@ -332,19 +302,15 @@ mod tests {
 
     #[test]
     fn test_parses_lambda_application() {
-        let mut token_stream = match build_lexer("(\\x -> (\\y -> 3)) 2") {
-            TS::Expr(ts) => ts,
-            _ => panic!()
-        };
-        let ast = parse(&mut token_stream, &mut vec![], &mut vec![], &SumTypeDefs::new());
-        let expected =
-            Term::App(
-                Box::new(Term::Lambda(
-                    Box::new(Term::Lambda(Box::new(Term::Atom(Atom::Int(3))), String::from("y"))),
-                    "x".to_string()
-                )),
-                Box::new(Term::Atom(Atom::Int(2)))
-                );
+        let mut tokens = get_tokens("(\\x -> (\\y -> 3)) 2");
+        let ast = parse(&mut tokens, &mut vec![], &mut vec![], &SumTypeDefs::new());
+        let expected = Term::App(
+            Box::new(Term::Lambda(
+                Box::new(Term::Lambda(Box::new(Term::Atom(Atom::Int(3))), String::from("y"))),
+                "x".to_string()
+            )),
+            Box::new(Term::Atom(Atom::Int(2)))
+        );
 
         assert_eq!(ast, Ok(expected));
     }
@@ -365,11 +331,8 @@ mod tests {
         let mut sum_types = SumTypeDefs::new();
         let constructors = vec![(String::from("Foo"), vec![Type::Unit])];
         sum_types.add_type("Bar", constructors, vec![]).unwrap();
-        let mut token_stream = match build_lexer("Foo") {
-            TS::Expr(ts) => ts,
-            _ => panic!()
-        };
-        let ast = parse(&mut token_stream, &mut vec![], &mut vec![], &sum_types).unwrap();
+        let mut tokens = get_tokens("Foo");
+        let ast = parse(&mut tokens, &mut vec![], &mut vec![], &sum_types).unwrap();
         let expected = Term::Constructor(0, String::from("Foo"));
         assert_eq!(ast, expected);
     }
@@ -397,10 +360,8 @@ mod tests {
 
         let mut sum_types = SumTypeDefs::new();
         declare_sum_type("Maybe a = Just a | None", &mut sum_types).unwrap();
-        let mut tokens = match build_lexer("case Just 10 of 5; Just 0 -> 42; Just x -> x; None -> 100; _ -> 777"){
-            TS::Expr(ts) => ts,
-            _ => panic!()
-        };
+        let expr = "case Just 10 of 5; Just 0 -> 42; Just x -> x; None -> 100; _ -> 777";
+        let mut tokens = get_tokens(expr);
         let ast = parse(&mut tokens, &mut vec![], &mut vec![], &sum_types).unwrap();
         let expected_cases = vec![
             (Pattern::Sum(0, String::from("Just"), vec![Pattern::Atom(Atom::Int(0))]), Term::Atom(Atom::Int(42))),
