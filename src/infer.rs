@@ -301,6 +301,7 @@ fn insert_sub(sub: &mut HashMap<usize, Type>, key: usize, mut value: Type) {
 
 /* Helpers for constraints */
 
+#[derive(Default)]
 pub struct GenTypeVar {
     pub n: usize
 }

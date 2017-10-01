@@ -31,6 +31,7 @@ impl ConstructorBinding {
 }
 
 #[derive(Debug)]
+#[derive(Default)]
 pub struct SumTypeDefs {
     pub bindings: Vec<ConstructorBinding>,
     types: HashMap<String, SumType>,
