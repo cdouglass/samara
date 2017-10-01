@@ -13,7 +13,6 @@ use structures::sums::SumTypeDefs;
 pub fn parse(tokens: &mut Peekable<TokenStream>, sum_types: &SumTypeDefs) -> Result<SumType, String> {
     let name = get_sum(tokens, "Type declaration must begin with an uppercase name")?;
     let mut type_vars = HashMap::new();
-    let mut variants = vec![];
     let mut params = vec![];
     let mut gen = GenTypeVar::new();
 
@@ -21,9 +20,7 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, sum_types: &SumTypeDefs) -> Res
         match tokens.next() {
             Some(Token::Var(name)) => {
                 let tv = gen.next().unwrap();
-                if let Type::TypeVar(_) = tv {
-                    params.push(tv.clone());
-                }
+                params.push(tv.clone());
                 type_vars.insert(name, tv);
             },
             Some(Token::Eql) => { break; },
@@ -33,10 +30,9 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, sum_types: &SumTypeDefs) -> Res
         }
     }
 
-    loop {
-        let variant = parse_variant(tokens, &type_vars, sum_types)?;
-        variants.push(variant);
-        if tokens.peek().is_none() { break; }
+    let mut variants = vec![];
+    while tokens.peek() != None {
+        variants.push(parse_variant(tokens, &type_vars, sum_types)?);
     }
 
     Ok(SumType::new(&name, variants, params))
@@ -188,9 +184,7 @@ mod tests {
 
     #[test]
     fn test_parses_type_var() {
-        let mut vars = HashMap::new();
-        vars.insert(String::from("a"), Type::TypeVar(1));
-        vars.insert(String::from("b"), Type::TypeVar(2));
+        let vars = vec![(String::from("a"), Type::TypeVar(1)), (String::from("b"), Type::TypeVar(2))].into_iter().collect();
         assert_eq!(parse_type(&mut build_lexer("a"), &mut vec![], &vars, &SumTypeDefs::new()).unwrap(), Type::TypeVar(1));
         assert_eq!(parse_type(&mut build_lexer("b"), &mut vec![], &vars, &SumTypeDefs::new()).unwrap(), Type::TypeVar(2));
 

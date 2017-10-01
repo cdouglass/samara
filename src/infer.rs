@@ -23,16 +23,17 @@ pub fn infer_type(term: &Term, bindings: &[LetBinding], mut gen: &mut GenTypeVar
     }
 
     for cb in &sum_types.bindings {
-        let universals = cb.result_type.params.iter().fold(HashSet::new(), |mut acc, typ| {
-            for v in type_vars_free_in(typ) { acc.insert(v); }
-            acc
-        });
+        let mut universals = HashSet::new();
+        for typ in &cb.result_type.params {
+            universals.extend(type_vars_free_in(typ));
+        }
         ctor_bindings.push(((*cb).clone(), universals));
     }
 
     let (mut typ, constraints) = get_constraints(term.clone(), &mut context, &mut gen, ctor_bindings.as_slice())?;
     let substitution = unify(constraints)?;
     apply_substitution(&substitution, &mut typ);
+    universalize(&mut typ);
     Ok(typ)
 }
 
@@ -62,26 +63,13 @@ pub fn apply_substitution(substitution: &HashMap<usize, Type>, typ: &mut Type) {
     }
 }
 
-// optionally instantiate a whole vector of other types with the same substitution
-fn instantiate(typ: &mut Type, types: &mut Vec<Type>, universals: &HashSet<usize>, gen: &mut GenTypeVar) {
-    let mut sub = HashMap::new();
-    let mut sorted : Vec<usize> = universals.iter().cloned().collect(); // for determinism in tests
-    sorted.sort();
-    for k in sorted {
-        sub.insert(k, gen.next().unwrap());
-    }
-    apply_substitution(&sub, typ);
-    for x in types.iter_mut() { apply_substitution(&sub, x); }
-}
-
 fn get_constraints(term: Term, mut context: &mut Vec<(Type, HashSet<usize>)>, gen: &mut GenTypeVar, constructor_bindings: &[(ConstructorBinding, HashSet<usize>)]) -> Result<(Type, Vec<(Type, Type)>), String> {
     match term {
         Term::Atom(ref atom) => Ok((base_type(atom), vec![])),
         Term::App(left, right) => {
             let (left_type, left_constraints) = get_constraints(*left, &mut context, gen, constructor_bindings)?;
             let (right_type, right_constraints) = get_constraints(*right, &mut context, gen, constructor_bindings)?;
-            let a = gen.next().unwrap();
-            let b = gen.next().unwrap();
+            let (a, b) = (gen.next().unwrap(), gen.next().unwrap());
             let mut constraints = left_constraints;
             constraints.extend(right_constraints);
             constraints.push((arrow(a.clone(), b.clone()), left_type));
@@ -101,28 +89,25 @@ fn get_constraints(term: Term, mut context: &mut Vec<(Type, HashSet<usize>)>, ge
             Ok((fresh_typ, vec![]))
         },
         Term::Conditional(pred, true_case, false_case) => {
-            let (pred_type, pred_constraints) = get_constraints(*pred, &mut context, gen, constructor_bindings)?;
-            let (true_type, true_constraints) = get_constraints(*true_case, &mut context, gen, constructor_bindings)?;
-            let (false_type, false_constraints) = get_constraints(*false_case, &mut context, gen, constructor_bindings)?;
-            let mut constraints = pred_constraints;
-            constraints.extend(true_constraints);
-            constraints.extend(false_constraints);
+            let (pred_type, mut constraints) = get_constraints(*pred, &mut context, gen, constructor_bindings)?;
             constraints.push((pred_type, Bool));
+            let (true_type, true_constraints) = get_constraints(*true_case, &mut context, gen, constructor_bindings)?;
+            constraints.extend(true_constraints);
+            let (false_type, false_constraints) = get_constraints(*false_case, &mut context, gen, constructor_bindings)?;
+            constraints.extend(false_constraints);
             constraints.push((true_type.clone(), false_type));
 
             Ok((true_type, constraints))
         },
         Term::Case(arg, cases, default) => {
-            let (arg_type, arg_constraints) = get_constraints(*arg, &mut context, gen, constructor_bindings)?;
+            let (arg_type, mut constraints) = get_constraints(*arg, &mut context, gen, constructor_bindings)?;
             let (default_type, default_constraints) = get_constraints(*default, &mut context, gen, constructor_bindings)?;
-            let mut constraints = arg_constraints;
             constraints.extend(default_constraints);
 
             for (pattern, arm) in cases {
                 let (binding_types, pat_type, pat_constraints) = get_pattern_constraints(&pattern, constructor_bindings, gen);
                 constraints.extend(pat_constraints);
                 constraints.push((arg_type.clone(), pat_type));
-
 
                 for bt in binding_types {
                     context.push((bt, HashSet::new()));
@@ -139,20 +124,16 @@ fn get_constraints(term: Term, mut context: &mut Vec<(Type, HashSet<usize>)>, ge
         Term::Let(_, value, body) => {
             context.push((gen.next().unwrap(), HashSet::new()));
             match body {
-                None =>  {
-                    let (value_type, value_constraints) = get_constraints(*value, &mut context, gen, constructor_bindings)?;
-                    Ok((value_type, value_constraints))
-                },
+                None => get_constraints(*value, &mut context, gen, constructor_bindings),
                 Some(b) => {
                     let (mut value_type, value_constraints) = get_constraints(*value, &mut context, gen, constructor_bindings)?;
-                    let value_sub = unify(value_constraints)?;
-                    apply_substitution(&value_sub, &mut value_type);
-                    let universals = type_vars_free_in(&value_type);
+                    apply_substitution(&unify(value_constraints)?, &mut value_type);
 
+                    let universals = type_vars_free_in(&value_type);
                     context.push((value_type, universals));
-                    let result = get_constraints(*b, &mut context, gen, constructor_bindings)?;
+                    let result = get_constraints(*b, &mut context, gen, constructor_bindings);
                     context.pop();
-                    Ok(result)
+                    result
                 }
             }
         },
@@ -203,46 +184,43 @@ fn unify(mut constraints: Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, Str
         None
     }
 
-    match constraints.pop() {
-        Some((s, t)) => {
-            if s == t { return unify(constraints); }
-            match (s, t) {
-                (Sum(st1), Sum(st2)) => {
-                    if st1.name == st2.name {
-                        for (t1, t2) in st1.params.iter().zip(st2.params.iter()) {
-                            constraints.push((t1.clone(), t2.clone()));
-                        }
-                        unify(constraints)
-                    } else {
-                        Err(String::from(format!("Type error: {} != {}", st1.name, st2.name)))
+    if let Some((s, t)) = constraints.pop() {
+        if s == t { return unify(constraints); }
+        match (s, t) {
+            (Sum(st1), Sum(st2)) => {
+                if st1.name == st2.name {
+                    for (t1, t2) in st1.params.iter().zip(st2.params.iter()) {
+                        constraints.push((t1.clone(), t2.clone()));
                     }
-                },
-                (Arrow(s1, s2), Arrow(t1, t2)) => {
-                    constraints.push((*s1, *t1));
-                    constraints.push((*s2, *t2));
                     unify(constraints)
-                },
-                (s, t) => {
-                    if let Some((n, typ)) = match_constraint_with_variable(&s, &t) {
-                        let mut sub = HashMap::new();
-                        sub.insert(n, typ.clone());
+                } else {
+                    Err(String::from(format!("Type error: {} != {}", st1.name, st2.name)))
+                }
+            },
+            (Arrow(s1, s2), Arrow(t1, t2)) => {
+                constraints.push((*s1, *t1));
+                constraints.push((*s2, *t2));
+                unify(constraints)
+            },
+            (s, t) => {
+                if let Some((n, mut typ)) = match_constraint_with_variable(&s, &t) {
+                    let sub = vec![(n, typ.clone())].into_iter().collect();
 
-                        for &mut (ref mut k, ref mut v) in &mut constraints {
-                            apply_substitution(&sub, k);
-                            apply_substitution(&sub, v);
-                        };
+                    for &mut (ref mut k, ref mut v) in &mut constraints {
+                        apply_substitution(&sub, k);
+                        apply_substitution(&sub, v);
+                    };
 
-                        let mut substitution = unify(constraints)?;
-                        insert_sub(&mut substitution, n, typ);
-                        Ok(substitution)
-                    } else {
-                        Err(String::from(format!("Type error: {:?} != {:?}", s, t)))
-                    }
+                    let mut substitution = unify(constraints)?;
+                    apply_substitution(&substitution, &mut typ);
+                    substitution.insert(n, typ);
+                    Ok(substitution)
+                } else {
+                    Err(String::from(format!("Type error: {:?} != {:?}", s, t)))
                 }
             }
-        },
-        None => Ok(HashMap::new())
-    }
+        }
+    } else { Ok(HashMap::new()) }
 }
 
 //(types of bound vars, type of whole pattern, constraints introduced)
@@ -282,7 +260,7 @@ fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(Construct
     }
 }
 
-/* Helpers for unification */
+/* Helpers for unification etc */
 
 fn occurs_in(n: usize, t: &Type) -> bool {
     match *t {
@@ -292,9 +270,47 @@ fn occurs_in(n: usize, t: &Type) -> bool {
     }
 }
 
-fn insert_sub(sub: &mut HashMap<usize, Type>, key: usize, mut value: Type) {
-    apply_substitution(sub, &mut value);
-    sub.insert(key, value);
+// optionally instantiate a whole vector of other types with the same substitution
+fn instantiate(typ: &mut Type, types: &mut Vec<Type>, universals: &HashSet<usize>, gen: &mut GenTypeVar) {
+    let mut sorted : Vec<usize> = universals.iter().cloned().collect(); // for determinism in tests
+    sorted.sort();
+    let sub = sorted.into_iter().zip(gen).collect();
+    apply_substitution(&sub, typ);
+    for x in types.iter_mut() { apply_substitution(&sub, x); }
+}
+
+fn universalize(mut typ: &mut Type) {
+    // very similar to type_vars_free_in
+    fn ordered_type_vars_free_in(typ: &Type) -> Vec<usize> {
+        match *typ {
+            TypeVar(n) => vec![n],
+            Arrow(ref t1, ref t2) => {
+                let mut tvars = ordered_type_vars_free_in(t1);
+                tvars.append(&mut ordered_type_vars_free_in(t2));
+                tvars
+            },
+            Sum(ref sum) => {
+                sum.params.iter().fold(vec![], |mut tvars, param| {
+                    tvars.append(&mut ordered_type_vars_free_in(param));
+                    tvars
+                })
+            },
+            _ => vec![]
+        }
+    }
+
+    // unique elements
+    let tvars = ordered_type_vars_free_in(typ).into_iter()
+        .fold((HashSet::new(), vec![]), |(mut set, mut tvars), n| {
+            if !set.contains(&n) { tvars.push(n); }
+            set.insert(n);
+            (set, tvars)
+    }).1;
+
+    let substitution = tvars.iter().enumerate()
+        .map(|(i, n)| (*n, TypeVar(i + 1))).collect();
+
+    apply_substitution(&substitution, &mut typ);
 }
 
 /* Helpers for constraints */
@@ -320,9 +336,7 @@ impl GenTypeVar {
 fn type_vars_free_in(typ: &Type) -> HashSet<usize> {
     let mut tvars = HashSet::new();
     match *typ {
-        TypeVar(n) => {
-            tvars.insert(n);
-        },
+        TypeVar(n) => { tvars.insert(n); },
         Arrow(ref t1, ref t2) => {
             tvars.extend(type_vars_free_in(t1));
             tvars.extend(type_vars_free_in(t2));
@@ -352,7 +366,6 @@ fn base_type(atom: &Atom) -> Type {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use evaluate;
     use SumTypeDefs;
     use structures::sums::SumType;
     use self::LetBinding;
@@ -429,29 +442,73 @@ mod tests {
     /* Test misc helper functions */
 
     #[test]
-    fn test_compose_substitutions() {
-        let mut sub1 = HashMap::new();
-        sub1.insert(1, Int);
-        insert_sub(&mut sub1, 2, TypeVar(1));
-        assert_eq!(sub1.get(&2), Some(&Int));
+    fn test_instantiate() {
+//fn instantiate(typ: &mut Type, types: &mut Vec<Type>, universals: &HashSet<usize>, gen: &mut GenTypeVar) {
+        let mut gen = GenTypeVar::new();
+        let t = arrow(TypeVar(10), TypeVar(10));
+        let universals = type_vars_free_in(&t);
+        for n in vec![1, 2, 3] {
+            let mut t1 = t.clone();
+            instantiate(&mut t1, &mut vec![], &universals, &mut gen);
+            assert_eq!(&t1, &arrow(TypeVar(n), TypeVar(n)));
+        }
     }
 
     #[test]
     fn test_type_vars_free_in() {
-        let mut expected = HashSet::new();
         let (t0, t1) = (TypeVar(5), TypeVar(2));
 
         for t in vec![Type::Int, Type::Bool, Type::Unit] {
-            assert_eq!(type_vars_free_in(&t), expected);
+            assert_eq!(type_vars_free_in(&t), HashSet::new());
         }
 
-        expected.insert(2);
-        expected.insert(5);
+        let expected = vec![2, 5].into_iter().collect();
         let actual = type_vars_free_in(&arrow(t0.clone(), t1.clone()));
         assert_eq!(actual, expected);
 
         let variants = vec![(String::from("Left"), vec![t0.clone()]), (String::from("Right"), vec![t1.clone()])];
         let actual = type_vars_free_in(&Type::Sum(SumType::new("Either", variants, vec![t0, t1])));
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_universalize_type() {
+        fn universalized(t: &Type) -> Type {
+            let mut typ = t.clone();
+            universalize(&mut typ);
+            typ
+        }
+
+        for t in vec![Type::Unit, Type::Bool, Type::Int] {
+            assert_eq!(universalized(&t), t);
+        }
+
+        let expected = Type::TypeVar(1);
+        let actual = universalized(&Type::TypeVar(5));
+        assert_eq!(actual, expected);
+
+        let expected = arrow(Type::TypeVar(1), Type::TypeVar(1));
+        let actual = universalized(&arrow(Type::TypeVar(5), Type::TypeVar(5)));
+        assert_eq!(actual, expected);
+
+        let expected = arrow(Type::TypeVar(1), Type::TypeVar(2));
+        let actual = universalized(&arrow(Type::TypeVar(5), Type::TypeVar(3)));
+        assert_eq!(actual, expected);
+
+        let t0 = TypeVar(5);
+        let t1 = TypeVar(2);
+        let expected_variants = vec![(String::from("Left"), vec![TypeVar(1)]), (String::from("Right"), vec![TypeVar(2)])];
+        let expected = Type::Sum(SumType::new("Either", expected_variants, vec![TypeVar(1), TypeVar(2)]));
+        let variants = vec![(String::from("Left"), vec![t0.clone()]), (String::from("Right"), vec![t1.clone()])];
+        let actual = universalized(&Type::Sum(SumType::new("Either", variants, vec![t0, t1])));
+        assert_eq!(actual, expected);
+
+        let t0 = arrow(Type::TypeVar(3), Bool);
+        let t1 = arrow(Type::TypeVar(2), Type::TypeVar(3));
+        let expected_variants = vec![(String::from("Left"), vec![arrow(Type::TypeVar(1), Bool)]), (String::from("Right"), vec![arrow(Type::TypeVar(2), Type::TypeVar(1))])];
+        let expected = Type::Sum(SumType::new("Either", expected_variants, vec![arrow(Type::TypeVar(1), Bool), arrow(Type::TypeVar(2), Type::TypeVar(1))]));
+        let variants = vec![(String::from("Left"), vec![t0.clone()]), (String::from("Right"), vec![t1.clone()])];
+        let actual = universalized(&Type::Sum(SumType::new("Either", variants, vec![t0, t1])));
         assert_eq!(actual, expected);
     }
 
@@ -542,18 +599,6 @@ mod tests {
         assert_type_err(&term, "Type error: Bool != Int");
     }
 
-    #[test]
-    fn test_fresh_instantiation() {
-        let mut bindings = vec![];
-        let mut gen = GenTypeVar::new();
-        let sum_types = SumTypeDefs::new();
-        evaluate("let id = (\\x -> x)", &mut bindings, &mut gen, &sum_types).unwrap();
-        let x = Term::Var(0, String::new());
-        assert_type_with_context(&x, &arrow(TypeVar(3), TypeVar(3)), &bindings, &mut gen, &sum_types);
-        assert_type_with_context(&x, &arrow(TypeVar(4), TypeVar(4)), &bindings, &mut gen, &sum_types);
-        assert_type_with_context(&x, &arrow(TypeVar(5), TypeVar(5)), &bindings, &mut gen, &sum_types);
-    }
-
     mod test_sum_types {
         use super::*;
         use structures::patterns::Pattern;
@@ -620,13 +665,13 @@ mod tests {
             let _ = either(&mut gen, &mut sum_types);
 
             let term = apply(left(), FIVE);
-            let left_concrete_variants = vec![(String::from("Left"), vec![Type::Int]), (String::from("Right"), vec![TypeVar(4)])];
-            let expected = Sum(SumType::new("Either", left_concrete_variants, vec![Type::Int, TypeVar(4)]));
+            let left_concrete_variants = vec![(String::from("Left"), vec![Type::Int]), (String::from("Right"), vec![TypeVar(1)])];
+            let expected = Sum(SumType::new("Either", left_concrete_variants, vec![Type::Int, TypeVar(1)]));
             assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
 
             let term = apply(right(), FIVE);
-            let right_concrete_variants = vec![(String::from("Left"), vec![TypeVar(7)]), (String::from("Right"), vec![Type::Int])];
-            let expected = Sum(SumType::new("Either", right_concrete_variants, vec![TypeVar(7), Type::Int]));
+            let right_concrete_variants = vec![(String::from("Left"), vec![TypeVar(1)]), (String::from("Right"), vec![Type::Int])];
+            let expected = Sum(SumType::new("Either", right_concrete_variants, vec![TypeVar(1), Type::Int]));
             assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
 
             //fully concrete
@@ -662,13 +707,13 @@ mod tests {
             let _ = either(&mut gen, &mut sum_types);
 
             let term = left_sum(&FIVE);
-            let left_concrete_variants = vec![(String::from("Left"), vec![Type::Int]), (String::from("Right"), vec![TypeVar(4)])];
-            let expected = Sum(SumType::new("Either", left_concrete_variants, vec![Type::Int, TypeVar(4)]));
+            let left_concrete_variants = vec![(String::from("Left"), vec![Type::Int]), (String::from("Right"), vec![TypeVar(1)])];
+            let expected = Sum(SumType::new("Either", left_concrete_variants, vec![Type::Int, TypeVar(1)]));
             assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
 
             let term = right_sum(&FIVE);
-            let right_concrete_variants = vec![(String::from("Left"), vec![TypeVar(7)]), (String::from("Right"), vec![Type::Int])];
-            let expected = Sum(SumType::new("Either", right_concrete_variants, vec![TypeVar(7), Type::Int]));
+            let right_concrete_variants = vec![(String::from("Left"), vec![TypeVar(1)]), (String::from("Right"), vec![Type::Int])];
+            let expected = Sum(SumType::new("Either", right_concrete_variants, vec![TypeVar(1), Type::Int]));
             assert_type_with_context(&term, &expected, &vec![], &mut gen, &sum_types);
 
             //fully concrete
