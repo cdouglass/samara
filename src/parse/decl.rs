@@ -188,9 +188,7 @@ mod tests {
 
     #[test]
     fn test_parses_type_var() {
-        let mut vars = HashMap::new();
-        vars.insert(String::from("a"), Type::TypeVar(1));
-        vars.insert(String::from("b"), Type::TypeVar(2));
+        let vars = vec![(String::from("a"), Type::TypeVar(1)), (String::from("b"), Type::TypeVar(2))].into_iter().collect();
         assert_eq!(parse_type(&mut build_lexer("a"), &mut vec![], &vars, &SumTypeDefs::new()).unwrap(), Type::TypeVar(1));
         assert_eq!(parse_type(&mut build_lexer("b"), &mut vec![], &vars, &SumTypeDefs::new()).unwrap(), Type::TypeVar(2));
 

@@ -204,8 +204,7 @@ fn unify(mut constraints: Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, Str
             },
             (s, t) => {
                 if let Some((n, mut typ)) = match_constraint_with_variable(&s, &t) {
-                    let mut sub = HashMap::new();
-                    sub.insert(n, typ.clone());
+                    let sub = vec![(n, typ.clone())].into_iter().collect();
 
                     for &mut (ref mut k, ref mut v) in &mut constraints {
                         apply_substitution(&sub, k);
@@ -261,7 +260,7 @@ fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(Construct
     }
 }
 
-/* Helpers for unification */
+/* Helpers for unification etc */
 
 fn occurs_in(n: usize, t: &Type) -> bool {
     match *t {
@@ -273,49 +272,43 @@ fn occurs_in(n: usize, t: &Type) -> bool {
 
 // optionally instantiate a whole vector of other types with the same substitution
 fn instantiate(typ: &mut Type, types: &mut Vec<Type>, universals: &HashSet<usize>, gen: &mut GenTypeVar) {
-    let mut sub = HashMap::new();
     let mut sorted : Vec<usize> = universals.iter().cloned().collect(); // for determinism in tests
     sorted.sort();
-    for k in sorted {
-        sub.insert(k, gen.next().unwrap());
-    }
+    let sub = sorted.into_iter().zip(gen).collect();
     apply_substitution(&sub, typ);
     for x in types.iter_mut() { apply_substitution(&sub, x); }
 }
 
 fn universalize(mut typ: &mut Type) {
+    // very similar to type_vars_free_in
     fn ordered_type_vars_free_in(typ: &Type) -> Vec<usize> {
-        let mut tvars = vec![];
         match *typ {
-            TypeVar(n) => {
-                tvars.push(n);
-            },
+            TypeVar(n) => vec![n],
             Arrow(ref t1, ref t2) => {
-                tvars.extend(ordered_type_vars_free_in(t1));
-                tvars.extend(ordered_type_vars_free_in(t2));
+                let mut tvars = ordered_type_vars_free_in(t1);
+                tvars.append(&mut ordered_type_vars_free_in(t2));
+                tvars
             },
             Sum(ref sum) => {
-                for param in &sum.params {
-                    tvars.extend(ordered_type_vars_free_in(param));
-                }
+                sum.params.iter().fold(vec![], |mut tvars, param| {
+                    tvars.append(&mut ordered_type_vars_free_in(param));
+                    tvars
+                })
             },
-            _ => { }
+            _ => vec![]
         }
-        let mut set = HashSet::new();
-        tvars.into_iter().filter(|n|
-            if set.contains(n) {
-                false
-            } else {
-                set.insert(*n);
-                true
-            }
-        ).collect()
     }
 
-    let mut substitution = HashMap::new();
-    for (i, n) in ordered_type_vars_free_in(typ).iter().enumerate() {
-        substitution.insert(*n, TypeVar(i + 1));
-    }
+    // unique elements
+    let tvars = ordered_type_vars_free_in(typ).into_iter()
+        .fold((HashSet::new(), vec![]), |(mut set, mut tvars), n| {
+            if !set.contains(&n) { tvars.push(n); }
+            set.insert(n);
+            (set, tvars)
+    }).1;
+
+    let substitution = tvars.iter().enumerate()
+        .map(|(i, n)| (*n, TypeVar(i + 1))).collect();
 
     apply_substitution(&substitution, &mut typ);
 }
@@ -343,9 +336,7 @@ impl GenTypeVar {
 fn type_vars_free_in(typ: &Type) -> HashSet<usize> {
     let mut tvars = HashSet::new();
     match *typ {
-        TypeVar(n) => {
-            tvars.insert(n);
-        },
+        TypeVar(n) => { tvars.insert(n); },
         Arrow(ref t1, ref t2) => {
             tvars.extend(type_vars_free_in(t1));
             tvars.extend(type_vars_free_in(t2));
@@ -465,15 +456,13 @@ mod tests {
 
     #[test]
     fn test_type_vars_free_in() {
-        let mut expected = HashSet::new();
         let (t0, t1) = (TypeVar(5), TypeVar(2));
 
         for t in vec![Type::Int, Type::Bool, Type::Unit] {
-            assert_eq!(type_vars_free_in(&t), expected);
+            assert_eq!(type_vars_free_in(&t), HashSet::new());
         }
 
-        expected.insert(2);
-        expected.insert(5);
+        let expected = vec![2, 5].into_iter().collect();
         let actual = type_vars_free_in(&arrow(t0.clone(), t1.clone()));
         assert_eq!(actual, expected);
 
