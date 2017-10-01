@@ -124,14 +124,16 @@ fn get_constraints(term: Term, mut context: &mut Vec<(Type, HashSet<usize>)>, ge
                 constraints.push((arg_type.clone(), pat_type));
 
 
+                let mut counter = vec![]; // silly
                 for bt in binding_types {
                     context.push((bt, HashSet::new()));
+                    counter.push(0);
                 }
 
                 let (arm_type, arm_constraints) = get_constraints(arm, &mut context, gen, constructor_bindings)?;
                 constraints.extend(arm_constraints);
                 constraints.push((arm_type, default_type.clone()));
-                context.pop();
+                for _ in counter { context.pop(); }
             }
 
             Ok((default_type, constraints))
@@ -569,7 +571,7 @@ mod tests {
 
         fn maybe(mut gen: &mut GenTypeVar, mut sum_types: &mut SumTypeDefs) -> Type {
             let t = gen.next().unwrap();
-            let variants = vec![(String::from("Just"), vec![t.clone()]), (String::from("None"), vec![t.clone()])];
+            let variants = vec![(String::from("Just"), vec![t.clone()]), (String::from("Nothing"), vec![])];
             sum_types.add_type("Maybe", variants, vec![t.clone()]).unwrap();
             t
         }
@@ -688,6 +690,21 @@ mod tests {
 
             let term = Term::Case(Box::new(left_sum(&unit())), cases, Box::new(FIVE));
             assert_type_with_context(&term, &Type::Int, &vec![], &mut gen, &sum_types);
+        }
+
+        #[test]
+        fn test_infer_case_type_from_patterns() {
+            let mut gen = GenTypeVar::new();
+            let mut sum_types = SumTypeDefs::new();
+            let _ = maybe(&mut gen, &mut sum_types);
+
+            let pat0 = Pattern::Sum(0, String::from("Just"), vec![Pattern::Wildcard]);
+
+            let cases = vec![(pat0, int_to_term(0))];
+            let term = Term::Lambda(Box::new(Term::Case(Box::new(Term::Var(0, String::from("x"))), cases, Box::new(FIVE))), String::from("x"));
+            let typ = Sum(SumType::new("Maybe", vec![(String::from("Just"), vec![Type::TypeVar(1)]), (String::from("Nothing"), vec![])], vec![Type::TypeVar(1)]));
+            let expected_type = arrow(typ, Int);
+            assert_type_with_context(&term, &expected_type, &vec![], &mut gen, &sum_types);
         }
 
         #[test]
