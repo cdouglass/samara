@@ -105,7 +105,7 @@ fn get_constraints(term: Term, mut context: &mut Vec<(Type, HashSet<usize>)>, ge
             constraints.extend(default_constraints);
 
             for (pattern, arm) in cases {
-                let (binding_types, pat_type, pat_constraints) = get_pattern_constraints(&pattern, constructor_bindings, gen);
+                let (binding_types, pat_type, pat_constraints) = get_pattern_constraints(&pattern, constructor_bindings, gen)?;
                 constraints.extend(pat_constraints);
                 constraints.push((arg_type.clone(), pat_type));
 
@@ -226,38 +226,43 @@ fn unify(mut constraints: Vec<(Type, Type)>) -> Result<HashMap<usize, Type>, Str
 }
 
 //(types of bound vars, type of whole pattern, constraints introduced)
-fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(ConstructorBinding, HashSet<usize>)], gen: &mut GenTypeVar) -> (Vec<Type>, Type, Vec<(Type, Type)>) {
+fn get_pattern_constraints(pattern: &Pattern, constructor_bindings: &[(ConstructorBinding, HashSet<usize>)], gen: &mut GenTypeVar) -> Result<(Vec<Type>, Type, Vec<(Type, Type)>), String> {
     match *pattern {
-        Pattern::Atom(ref atom) => {
-            let typ = base_type(atom);
-            (vec![], typ, vec![])
-        },
+        Pattern::Atom(ref atom) => Ok((vec![], base_type(atom), vec![])),
         Pattern::Sum(ref n, _, ref patterns) => {
             let (ref cb, ref universals) = constructor_bindings[*n];
             let mut bound_types = vec![];
             let mut constraints = vec![];
-            let mut arg_types : Vec<Type> = cb.arg_types.iter().rev().cloned().collect();
+            let mut return_type = Type::Sum(cb.result_type.clone());
+            instantiate(&mut return_type, &mut vec![], universals, gen);
 
-            for pat in patterns {
-                //TODO error if more sub-patterns than arguments
-                if let Some(mut arg_type) = arg_types.pop() {
-                    instantiate(&mut arg_type, &mut vec![], universals, gen);
-                    let (bts, inner_type, inner_constraints) = get_pattern_constraints(pat, constructor_bindings, gen);
-                    constraints.extend(inner_constraints);
-                    constraints.push((arg_type, inner_type));
-                    bound_types.extend(bts);
-                }
+            let arg_types = match return_type {
+                Type::Sum(ref t) => {
+                    t.variants.iter().cloned()
+                        .find(|variant| variant.0 == cb.tag)
+                        .unwrap().1
+                },
+                _ => panic!("return_type was explicitly constructed as a sum type but could not be unwrapped. This should never happen.")
+            };
+            if arg_types.len() != patterns.len() {
+                return Err(format!("Constructor {} should have {} argument(s) but instead got {}", cb.tag, arg_types.len(), patterns.len()));
             }
-            let return_type = arg_types.into_iter().fold(Type::Sum(cb.result_type.clone()), |acc, t| arrow(t, acc));
-            (bound_types, return_type, constraints)
+
+            for (pat, arg_type) in patterns.iter().zip(arg_types.iter().cloned()) {
+                let (bts, inner_type, inner_constraints) = get_pattern_constraints(pat, constructor_bindings, gen)?;
+                constraints.extend(inner_constraints);
+                constraints.push((arg_type, inner_type));
+                bound_types.extend(bts);
+            }
+            Ok((bound_types, return_type, constraints))
         },
         Pattern::Var(_) => {
             let typ = gen.next().unwrap();
-            (vec![typ.clone()], typ, vec![])
+            Ok((vec![typ.clone()], typ, vec![]))
         },
         Pattern::Wildcard => {
             let typ = gen.next().unwrap();
-            (vec![], typ, vec![])
+            Ok((vec![], typ, vec![]))
         }
     }
 }
@@ -621,6 +626,19 @@ mod tests {
         }
 
         #[test]
+        fn test_pattern_with_wrong_number_of_args() {
+            let (sum_types, mut gen) = make_sum_types();
+
+            let too_many_args = Term::Case(Box::new(right_sum(&FIVE)), vec![(Pattern::Sum(RIGHT, String::from("Right"), vec![Pattern::Wildcard, Pattern::Wildcard]), FIVE)], Box::new(FIVE));
+            let expected = String::from("Constructor Right should have 1 argument(s) but instead got 2");
+            assert_type_err(&too_many_args, &expected, &vec![], &mut gen, &sum_types);
+
+            let too_few_args = Term::Case(Box::new(right_sum(&FIVE)), vec![(Pattern::Sum(RIGHT, String::from("Right"), vec![]), FIVE)], Box::new(FIVE));
+            let expected = String::from("Constructor Right should have 1 argument(s) but instead got 0");
+            assert_type_err(&too_few_args, &expected, &vec![], &mut gen, &sum_types);
+        }
+
+        #[test]
         fn test_nullary_constructor() {
             let (sum_types, mut gen) = make_sum_types();
 
@@ -740,7 +758,6 @@ mod tests {
         }
 
         #[test]
-        // failing
         fn test_infer_case_arg_type_from_nested_patterns() {
             let (sum_types, mut gen) = make_sum_types();
 
@@ -783,7 +800,7 @@ mod tests {
             let x = Term::Var(0, String::from("x"));
 
             let pat0 = Pattern::Sum(LEFT, String::from("Left"), vec![Pattern::Sum(JUST, String::from("Just"), vec![Pattern::Var(String::from("x"))])]);
-            let pat1 = Pattern::Sum(LEFT, String::from("Left"), vec![Pattern::Sum(NONE, String::from("None"), vec![Pattern::Wildcard])]);
+            let pat1 = Pattern::Sum(LEFT, String::from("Left"), vec![Pattern::Sum(NONE, String::from("None"), vec![])]);
             let pat2 = Pattern::Sum(RIGHT, String::from("Right"), vec![Pattern::Var(String::from("x"))]);
             let cases = vec![(pat0, x.clone()), (pat1, FIVE), (pat2, x)];
 

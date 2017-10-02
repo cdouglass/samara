@@ -171,8 +171,7 @@ fn test_evaluate_case_expression() {
     assert_evaluates_to_atom_with_context("case Just 9 of 100; Just 10 -> 42; Just x -> x; None -> 0", &mut bindings, &mut gen, &sum_types, Atom::Int(9));
     assert_evaluates_to_atom_with_context("case None of 100; Just 10 -> 42; Just x -> x; None -> 0", &mut bindings, &mut gen, &sum_types, Atom::Int(0));
     assert_evaluates_to_atom_with_context("case None of 100; Just 10 -> 42; Just x -> x", &mut bindings, &mut gen, &sum_types, Atom::Int(100));
-
-    assert_evaluates_to_atom_with_context("case Just(Just 4) of 100; Just Just x -> (* x x); Just None -> 5", &mut bindings, &mut gen, &sum_types, Atom::Int(16));
+    assert_evaluates_to_atom_with_context("case Just(Just 4) of 100; Just(Just x) -> (* x x); Just None -> 5", &mut bindings, &mut gen, &sum_types, Atom::Int(16));
     assert_evaluates_to_atom_with_context("case Just(Just 4) of 100; Just (Just x) -> (* x x); Just None -> 5", &mut bindings, &mut gen, &sum_types, Atom::Int(16));
 }
 
