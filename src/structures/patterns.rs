@@ -121,7 +121,7 @@ mod tests {
         assert_eq!(actual, Some(expected));
 
         assert_eq!(pat.match_term(&Term::Sum(RIGHT, String::from("Right"), vec![square.clone()])), None);
-        assert_eq!(pat.match_term(&Term::Constructor(RIGHT, String::from("Right"))), None);
+        assert_eq!(pat.match_term(&Term::Lambda(Box::new(Term::Sum(RIGHT, String::from("Right"), vec![Term::Var(0, String::from("x"))])), String::from("x"))), None);
         assert_eq!(pat.match_term(&Term::Atom(Atom::Int(5))), None);
     }
 

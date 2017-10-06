@@ -202,6 +202,11 @@ fn test_pair_type() {
     let mut gen = GenTypeVar::new();
     let mut sum_types = SumTypeDefs::new();
     declare_sum_type("Pair a b = Pair a b", &mut sum_types).unwrap();
+    let x = evaluate("Pair True 5", &mut bindings, &mut gen, &sum_types).unwrap();
+    match x {
+        Term::Sum(_, _, xs) => println!("xs: {:?}", xs),
+        _ => panic!()
+    }
     evaluate("Pair True 5", &mut bindings, &mut gen, &sum_types).unwrap();
     assert_evaluates_to_atom_with_context("(\\x -> 5) (Pair 0 10)", &mut bindings, &mut gen, &sum_types, Atom::Int(5));
     assert_evaluates_to_atom_with_context("case (Pair 0 10) of 5; Pair _ x -> x", &mut bindings, &mut gen, &sum_types, Atom::Int(10));

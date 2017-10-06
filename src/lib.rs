@@ -103,7 +103,6 @@ fn reduce(ast: Term, session_bindings: &[LetBinding], sum_types: &SumTypeDefs) -
         },
         // if not defined, would already have blown up in parse
         Var(n, _) => Ok(session_bindings[session_bindings.len() - n - 1].term.clone()),
-        Constructor(n, _) => Ok(sum_types.bindings[n].term(n)),
         Sum(n, constructor, values) => {
             let mut new_values = vec![];
             for val in values {
@@ -156,7 +155,7 @@ fn apply(func: Term, arg: Term, session_bindings: &[LetBinding], sum_types: &Sum
             reduce(unshift_indices(sub_at_index(*body, &arg, 0), 1), session_bindings, sum_types)
         },
         // func is already reduced, so should not be in any of these forms
-        Conditional(_, _, _) | Var(_, _) | Let(_, _, _) | Constructor(_, _) | Sum(_, _, _) | Case(_, _, _) => {
+        Conditional(_, _, _) | Var(_, _) | Let(_, _, _) | Sum(_, _, _) | Case(_, _, _) => {
             Err(type_err)
         }
     }
@@ -166,7 +165,6 @@ fn apply(func: Term, arg: Term, session_bindings: &[LetBinding], sum_types: &Sum
 fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
     match body {
         Atom(a) => Atom(a),
-        Constructor(n, constructor) => Constructor(n, constructor),
         Sum(n, constructor, values) => {
             let subbed_values = values.into_iter().map(|val| sub_at_index(val, t, index)).collect();
             Sum(n, constructor, subbed_values)
@@ -214,7 +212,6 @@ fn sub_at_index(body: Term, t: &Term, index: usize) -> Term {
 fn shift_indices(term: Term, distance: usize, cutoff: usize) -> Term {
     match term {
         Atom(a) => Atom(a),
-        Constructor(n, constructor) => Constructor(n, constructor),
         Sum(n, constructor, values) => Sum(n, constructor, values),
         Case(arg, cases, default) => {
             let new_arg = shift_indices(*arg, distance, cutoff);
@@ -254,7 +251,6 @@ fn shift_indices(term: Term, distance: usize, cutoff: usize) -> Term {
 fn unshift_indices(term: Term, cutoff: usize) -> Term {
     match term {
         Atom(a) => Atom(a),
-        Constructor(n, constructor) => Constructor(n, constructor),
         Sum(n, constructor, values) => {
             let new_values = values.into_iter().map(|val| unshift_indices(val, cutoff)).collect();
             Sum(n, constructor, new_values)

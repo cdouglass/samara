@@ -139,15 +139,6 @@ fn get_constraints(term: Term, mut context: &mut Vec<(Type, HashSet<usize>)>, ge
                 }
             }
         },
-        Term::Constructor(ref n, _) => {
-            let (ref cb, ref universals) = constructor_bindings[*n];
-            let mut typ = Type::Sum(cb.result_type.clone());
-            for a in cb.arg_types.iter().rev() {
-                typ = arrow(a.clone(), typ);
-            }
-            instantiate(&mut typ, &mut vec![], universals, gen);
-            Ok((typ, vec![]))
-        },
         Term::Sum(n, c, values) => {
             let (ref cb, ref universals) = constructor_bindings[n];
             let mut constraints = vec![];
@@ -671,7 +662,8 @@ mod tests {
         }
 
         fn left() -> Term {
-            Term::Constructor(LEFT, String::from("Left"))
+            let x = String::from("x");
+            lambda(Term::Sum(LEFT, String::from("Left"), vec![Term::Var(0, x)]), "x")
         }
 
         fn left_sum(term: &Term) -> Term {
@@ -679,7 +671,7 @@ mod tests {
         }
 
         fn right() -> Term {
-            Term::Constructor(RIGHT, String::from("Right"))
+            lambda(Term::Sum(RIGHT, String::from("Right"), vec![Term::Var(0, String::from("x"))]), "x")
         }
 
         fn right_sum(term: &Term) -> Term {
@@ -703,19 +695,6 @@ mod tests {
             let term = case(right_sum(&FIVE), vec![(too_few_args, FIVE)], FIVE);
             let msg = "Constructor Right should have 1 argument(s) but instead got 0";
             assert_type_err(&term, &msg, &vec![], &mut gen, &sum_types);
-        }
-
-        #[test]
-        fn test_nullary_constructor() {
-            let (sum_types, mut gen) = make_sum_types();
-
-            let term = Term::Constructor(FOO, String::from("Foo"));
-            let typ = SumType::new("Baz", vec![(String::from("Foo"), vec![])], vec![]);
-            let msg = format!("Type error: Int -> t5 != {:?}", typ);
-            assert_type(&term, &Sum(typ), &vec![], &mut gen, &sum_types);
-
-            let invalid_1 = apply(Term::Constructor(FOO, String::from("Foo")), FIVE);
-            assert_type_err(&invalid_1, &msg, &vec![], &mut gen, &sum_types);
         }
 
         #[test]

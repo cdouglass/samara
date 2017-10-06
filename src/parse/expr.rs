@@ -11,6 +11,7 @@ use structures::Atom;
 use structures::Op;
 use structures::Term;
 use structures::patterns::Pattern;
+use structures::sums::ConstructorBinding;
 
 pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token>, mut identifier_stack: &mut Vec<String>, sum_types: &SumTypeDefs) -> Result<Term, String> {
     let close_err = Err(String::from("Unexpected CLOSE delimiter"));
@@ -78,7 +79,8 @@ pub fn parse(tokens: &mut Peekable<TokenStream>, mut token_stack: &mut Vec<Token
             },
             Some(Token::Constructor(s)) => {
                 tokens.next();
-                identify_constructor(&s, sum_types).map(|k| Term::Constructor(k, s))
+                let (n, cb) = identify_constructor(&s, sum_types)?;
+                Ok(cb.term(n))
             },
             Some(Token::Identifier(s)) => {
                 tokens.next();
@@ -215,7 +217,7 @@ fn parse_pattern(tokens: &mut Peekable<TokenStream>, token_stack: &mut Vec<Token
             }
         },
         Some(Token::Constructor(s)) => {
-            let k = identify_constructor(&s, sum_types)?;
+            let k = identify_constructor(&s, sum_types)?.0;
             let mut patterns = vec![];
             while tokens.peek() != Some(&Token::Keyword(Arrow)) {
                 if tokens.peek() == Some(&Token::Close) {
@@ -245,10 +247,10 @@ fn parse_operator(s: &str) -> Result<Atom, String> {
     Op::from_str(s).map(Atom::BuiltIn)
 }
 
-fn identify_constructor(s: &str, sum_types: &SumTypeDefs) -> Result<usize, String> {
+fn identify_constructor<'a>(s: &str, sum_types: &'a SumTypeDefs) -> Result<(usize, &'a ConstructorBinding), String> {
     let mut binding_iter = sum_types.bindings.iter();
     match binding_iter.position(|x| x.tag == s) {
-        Some(k) => Ok(k),
+        Some(k) => Ok((k, &sum_types.bindings[k])),
         None => Err(String::from(format!("Unknown constructor {}", s)))
     }
 }
@@ -333,7 +335,7 @@ mod tests {
         sum_types.add_type("Bar", constructors, vec![]).unwrap();
         let mut tokens = get_tokens("Foo");
         let ast = parse(&mut tokens, &mut vec![], &mut vec![], &sum_types).unwrap();
-        let expected = Term::Constructor(0, String::from("Foo"));
+        let expected = Term::Lambda(Box::new(Term::Sum(0, String::from("Foo"), vec![Term::Var(0, String::from("x"))])), String::from("x"));
         assert_eq!(ast, expected);
     }
 
@@ -370,7 +372,7 @@ mod tests {
             (Pattern::Wildcard, Term::Atom(Atom::Int(777)))];
         match ast {
             Term::Case(arg, cases, default) => {
-                assert_eq!(*arg, Term::App(Box::new(Term::Constructor(0, String::from("Just"))), Box::new(Term::Atom(Atom::Int(10)))));
+                assert_eq!(*arg, Term::App(Box::new(Term::Lambda(Box::new(Term::Sum(0, String::from("Just"), vec![Term::Var(0, String::from("x"))])), String::from("x"))), Box::new(Term::Atom(Atom::Int(10)))));
                 assert_eq!(*default, Term::Atom(Atom::Int(5)));
                 assert_eq!(cases, expected_cases);
             },
